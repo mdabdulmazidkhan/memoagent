@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Upload, X, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useBackend } from "@/hooks/useBackend";
+import { useAuth } from "@clerk/clerk-react";
 
 interface FileUploadProps {
   conversationId: string;
@@ -17,7 +17,7 @@ interface UploadedFile {
 
 export function FileUpload({ conversationId, onUploadComplete }: FileUploadProps) {
   const [uploading, setUploading] = useState<UploadedFile[]>([]);
-  const backend = useBackend();
+  const { getToken } = useAuth();
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -38,13 +38,19 @@ export function FileUpload({ conversationId, onUploadComplete }: FileUploadProps
         formData.append("file", upload.file);
         formData.append("conversationId", conversationId);
 
-        const response = await fetch(`${backend}/chat/upload`, {
+        const token = await getToken();
+        
+        const response = await fetch(`https://proj-d3v1nkk82vjkdgl3jjc0.api.lp.dev/chat/upload`, {
           method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+          },
           body: formData,
         });
 
         if (!response.ok) {
-          throw new Error(`Upload failed: ${response.statusText}`);
+          const errorText = await response.text();
+          throw new Error(`Upload failed: ${response.status} - ${errorText}`);
         }
 
         const result = await response.json();
@@ -124,6 +130,11 @@ export function FileUpload({ conversationId, onUploadComplete }: FileUploadProps
                 {upload.videoNo && (
                   <span className="ml-2 text-muted-foreground text-xs">
                     ({upload.videoNo})
+                  </span>
+                )}
+                {upload.error && (
+                  <span className="ml-2 text-red-600 text-xs">
+                    {upload.error}
                   </span>
                 )}
               </span>

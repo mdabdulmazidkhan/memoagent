@@ -1,8 +1,10 @@
 import { api } from "encore.dev/api";
 import { getAuthData } from "~encore/auth";
 import { randomUUID } from "crypto";
-import { memoriesClient } from "../mcp/memories";
+import { secret } from "encore.dev/config";
 import db from "../db";
+
+const memoriesApiKey = secret("MemoriesApiKey");
 
 interface UploadFileResponse {
   videoNo: string;
@@ -18,18 +20,38 @@ export const uploadFile = api.raw(
     
     try {
       console.log("[Upload] Receiving file upload request");
+      console.log("[Upload] Content-Type:", req.headers["content-type"]);
       
-      // Get form data from request
-      const formData = await req.formData();
-      const file = formData.get("file") as File | null;
-      const conversationId = formData.get("conversationId") as string | null;
-      
-      if (!file) {
+      // Parse multipart form data manually
+      const contentType = req.headers["content-type"] || "";
+      if (!contentType.includes("multipart/form-data")) {
         res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "No file provided" }));
+        res.end(JSON.stringify({ error: "Expected multipart/form-data" }));
         return;
       }
-      
+
+      // Get the boundary from content-type header
+      const boundaryMatch = contentType.match(/boundary=(.+)$/);
+      if (!boundaryMatch) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "No boundary found in content-type" }));
+        return;
+      }
+
+      // Read the request body
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) {
+        chunks.push(Buffer.from(chunk));
+      }
+      const body = Buffer.concat(chunks);
+
+      console.log("[Upload] Received body size:", body.length);
+
+      // Extract conversationId from form data (simple text parsing)
+      const bodyStr = body.toString();
+      const conversationIdMatch = bodyStr.match(/name="conversationId"\r\n\r\n([^\r\n]+)/);
+      const conversationId = conversationIdMatch ? conversationIdMatch[1] : null;
+
       if (!conversationId) {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "No conversation ID provided" }));
@@ -47,41 +69,46 @@ export const uploadFile = api.raw(
         return;
       }
 
-      console.log(`[Upload] File: ${file.name}, Size: ${file.size}, Type: ${file.type}`);
+      console.log(`[Upload] Uploading for conversation: ${conversationId}`);
 
-      // Create new FormData for Memories.ai API
-      const memoriesFormData = new FormData();
-      memoriesFormData.append("file", file);
-      memoriesFormData.append("unique_id", auth.userID);
-      memoriesFormData.append("retain_original_video", "true");
+      // Forward the entire form data to Memories.ai
+      const apiKey = memoriesApiKey();
+      const uploadResponse = await fetch("https://api.memories.ai/serve/api/v1/upload", {
+        method: "POST",
+        headers: {
+          "Authorization": apiKey,
+          "Content-Type": contentType,
+        },
+        body: body,
+      });
+
+      console.log("[Upload] Memories.ai response status:", uploadResponse.status);
+
+      if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error("[Upload] Memories.ai error:", errorText);
+        throw new Error(`Memories.ai upload failed: ${uploadResponse.status} - ${errorText}`);
+      }
+
+      const result = await uploadResponse.json() as { code: string; msg: string; data: UploadFileResponse };
       
-      // Add tags for organization
-      memoriesFormData.append("tags", JSON.stringify([
-        conversationId,
-        "chat-upload",
-        new Date().toISOString().split("T")[0]
-      ]));
+      if (result.code !== "0000") {
+        throw new Error(`Memories.ai error: ${result.msg}`);
+      }
 
-      console.log("[Upload] Uploading to Memories.ai...");
-      
-      // Call Memories.ai upload endpoint
-      const result = await memoriesClient.callTool("uploadVideoFile", {
-        formData: memoriesFormData
-      }) as UploadFileResponse;
-
-      console.log("[Upload] Upload successful:", result);
+      console.log("[Upload] Upload successful:", result.data);
 
       // Save video reference to database
       const videoId = randomUUID();
       await db.exec`
         INSERT INTO conversation_videos (id, conversation_id, video_no, video_name, status)
-        VALUES (${videoId}, ${conversationId}, ${result.videoNo}, ${result.videoName}, ${result.videoStatus})
+        VALUES (${videoId}, ${conversationId}, ${result.data.videoNo}, ${result.data.videoName}, ${result.data.videoStatus})
       `;
 
-      console.log(`[Upload] Saved video ${result.videoNo} to conversation ${conversationId}`);
+      console.log(`[Upload] Saved video ${result.data.videoNo} to conversation ${conversationId}`);
 
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify(result));
+      res.end(JSON.stringify(result.data));
       
     } catch (error) {
       console.error("[Upload] Error:", error);
@@ -92,4 +119,3 @@ export const uploadFile = api.raw(
     }
   }
 );
-
