@@ -22,17 +22,47 @@ interface MessageChunk {
 async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boolean; toolName?: string; args?: Record<string, unknown> }> {
   try {
     const tools = await mcpClient.getTools();
+    const messageLower = userMessage.toLowerCase();
     
-    for (const tool of tools) {
-      const toolNameLower = tool.name.toLowerCase();
-      const messageLower = userMessage.toLowerCase();
+    // Check for image generation keywords
+    if (messageLower.includes("image") || messageLower.includes("picture") || 
+        messageLower.includes("photo") || messageLower.includes("draw")) {
       
-      if (messageLower.includes(toolNameLower) || 
-          (tool.description && messageLower.includes(tool.description.toLowerCase().split(' ')[0]))) {
+      // Check if it's image generation from text
+      if (messageLower.includes("generate") || messageLower.includes("create") || 
+          messageLower.includes("make") || messageLower.includes("of")) {
+        const textToImageTool = tools.find(t => t.name.includes("generateImagesFromText"));
+        if (textToImageTool) {
+          return {
+            shouldUseMCP: true,
+            toolName: textToImageTool.name,
+            args: { instructions: userMessage }
+          };
+        }
+      }
+      
+      // Check for background removal
+      if (messageLower.includes("background") || messageLower.includes("remove")) {
+        const bgRemovalTool = tools.find(t => t.name.includes("imageBackgroundRemoval"));
+        if (bgRemovalTool) {
+          return {
+            shouldUseMCP: true,
+            toolName: bgRemovalTool.name,
+            args: { instructions: userMessage }
+          };
+        }
+      }
+    }
+    
+    // Check for video generation
+    if (messageLower.includes("video") && (messageLower.includes("generate") || 
+        messageLower.includes("create") || messageLower.includes("make"))) {
+      const videoTool = tools.find(t => t.name.includes("generateVideoFromText"));
+      if (videoTool) {
         return {
           shouldUseMCP: true,
-          toolName: tool.name,
-          args: {}
+          toolName: videoTool.name,
+          args: { instructions: userMessage }
         };
       }
     }
