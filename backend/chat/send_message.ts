@@ -49,7 +49,7 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
         // Text-to-video
         return {
           shouldUseMCP: true,
-          toolName: "generateVideoFromText",
+          toolName: "videoInference",
           args: { 
             prompt: prompt,
             model: "runware:501@1",  // Kling AI
