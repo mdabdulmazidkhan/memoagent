@@ -21,18 +21,128 @@ interface MessageChunk {
 
 async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boolean; toolName?: string; args?: Record<string, unknown> }> {
   try {
-    const tools = await mcpClient.getTools();
     const messageLower = userMessage.toLowerCase();
     
-    // Check for image generation keywords
+    // VIDEO GENERATION
+    if (messageLower.includes("video")) {
+      if (messageLower.includes("generate") || messageLower.includes("create") || messageLower.includes("make")) {
+        // Extract prompt
+        let prompt = userMessage;
+        const prefixes = ["generate", "create", "make"];
+        for (const prefix of prefixes) {
+          const regex = new RegExp(`${prefix}\\s+(a\\s+)?video\\s+(of\\s+)?`, "i");
+          prompt = prompt.replace(regex, "").trim();
+        }
+        
+        // Check for image-to-video
+        if (messageLower.includes("from image") || messageLower.includes("animate")) {
+          return {
+            shouldUseMCP: true,
+            toolName: "imageToVideo",
+            args: { 
+              imageURL: "placeholder",  // User needs to provide
+              prompt: prompt || "animate this image"
+            }
+          };
+        }
+        
+        // Text-to-video
+        return {
+          shouldUseMCP: true,
+          toolName: "generateVideoFromText",
+          args: { 
+            prompt: prompt,
+            model: "runware:501@1",  // Kling AI
+            duration: 5
+          }
+        };
+      }
+    }
+    
+    // IMAGE GENERATION & MANIPULATION
     if (messageLower.includes("image") || messageLower.includes("picture") || 
         messageLower.includes("photo") || messageLower.includes("draw")) {
       
-      // Check if it's image generation from text
+      // Caption image
+      if (messageLower.includes("caption") || messageLower.includes("describe")) {
+        return {
+          shouldUseMCP: true,
+          toolName: "captionImage",
+          args: { imageURL: "placeholder" }
+        };
+      }
+      
+      // Image-to-image
+      if ((messageLower.includes("transform") || messageLower.includes("modify") || 
+           messageLower.includes("change")) && messageLower.includes("from")) {
+        let prompt = userMessage;
+        const regex = /transform|modify|change/i;
+        prompt = prompt.replace(regex, "").trim();
+        
+        return {
+          shouldUseMCP: true,
+          toolName: "imageToImage",
+          args: { 
+            prompt: prompt,
+            seedImage: "placeholder",
+            strength: 0.7
+          }
+        };
+      }
+      
+      // Inpainting
+      if (messageLower.includes("inpaint") || messageLower.includes("edit part") || 
+          messageLower.includes("replace part")) {
+        return {
+          shouldUseMCP: true,
+          toolName: "inpaintImage",
+          args: {
+            prompt: userMessage,
+            seedImage: "placeholder",
+            maskImage: "placeholder"
+          }
+        };
+      }
+      
+      // Background removal
+      if (messageLower.includes("background") && messageLower.includes("remove")) {
+        return {
+          shouldUseMCP: true,
+          toolName: "removeBackground",
+          args: { imageURL: "placeholder" }
+        };
+      }
+      
+      // Upscale
+      if (messageLower.includes("upscale") || messageLower.includes("enlarge") || 
+          (messageLower.includes("enhance") && messageLower.includes("quality"))) {
+        const factor = messageLower.includes("4x") ? 4 : messageLower.includes("3x") ? 3 : 2;
+        return {
+          shouldUseMCP: true,
+          toolName: "upscaleImage",
+          args: { imageURL: "placeholder", upscaleFactor: factor }
+        };
+      }
+      
+      // ControlNet preprocessing
+      if (messageLower.includes("controlnet") || messageLower.includes("edge detection") || 
+          messageLower.includes("depth map") || messageLower.includes("pose detection")) {
+        let preprocessor = "canny";
+        if (messageLower.includes("depth")) preprocessor = "depth";
+        else if (messageLower.includes("pose")) preprocessor = "pose";
+        else if (messageLower.includes("line") || messageLower.includes("mlsd")) preprocessor = "mlsd";
+        
+        return {
+          shouldUseMCP: true,
+          toolName: "controlnetPreprocess",
+          args: { imageURL: "placeholder", preprocessor }
+        };
+      }
+      
+      // Text-to-image (default for image generation)
       if (messageLower.includes("generate") || messageLower.includes("create") || 
           messageLower.includes("make") || messageLower.includes("of")) {
         
-        // Extract the prompt - remove the command words
         let prompt = userMessage;
         const prefixes = ["generate", "create", "make", "draw"];
         for (const prefix of prefixes) {
@@ -40,33 +150,34 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
           prompt = prompt.replace(regex, "").trim();
         }
         
+        // Check for model selection
+        let model = "runware:100@1";  // Default: FLUX Schnell
+        if (messageLower.includes("sdxl")) model = "civitai:4201@130090";
+        else if (messageLower.includes("sd3")) model = "civitai:139562@297320";
+        else if (messageLower.includes("flux")) model = "runware:100@1";
+        
         return {
           shouldUseMCP: true,
           toolName: "generateImageFromText",
           args: { 
             prompt: prompt,
-            model: "runware:100@1"  // FLUX Schnell - fast and high quality
+            model: model,
+            width: 512,
+            height: 512,
+            steps: 20
           }
         };
       }
-      
-      // Check for background removal
-      if (messageLower.includes("background") && messageLower.includes("remove")) {
-        return {
-          shouldUseMCP: true,
-          toolName: "removeBackground",
-          args: { imageURL: "placeholder" }  // User would need to provide URL
-        };
-      }
-      
-      // Check for upscale
-      if (messageLower.includes("upscale") || messageLower.includes("enhance") || messageLower.includes("improve")) {
-        return {
-          shouldUseMCP: true,
-          toolName: "upscaleImage",
-          args: { imageURL: "placeholder", upscaleFactor: 2 }
-        };
-      }
+    }
+    
+    // PROMPT ENHANCEMENT
+    if (messageLower.includes("enhance prompt") || messageLower.includes("improve prompt")) {
+      const prompt = userMessage.replace(/enhance|improve\s+prompt:?/i, "").trim();
+      return {
+        shouldUseMCP: true,
+        toolName: "enhancePrompt",
+        args: { prompt }
+      };
     }
   } catch (error) {
     console.error("Error checking MCP tools:", error);
