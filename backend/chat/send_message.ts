@@ -52,8 +52,11 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
           toolName: "videoInference",
           args: { 
             prompt: prompt,
-            model: "runware:501@1",  // Kling AI
-            duration: 5
+            model: "google:3@1",  // Veo 3.0 Fast (default T2V)
+            width: 1280,
+            height: 720,
+            duration: 5,
+            fps: 24
           }
         };
       }
@@ -236,26 +239,61 @@ export const sendMessage = api.streamOut<SendMessageRequest, MessageChunk>(
           content: statusMsg
         });
 
-        try {
-          console.log("Calling MCP tool:", mcpCheck.toolName, "with args:", mcpCheck.args);
-          const toolResult = await mcpClient.callTool(mcpCheck.toolName, mcpCheck.args || {});
-          console.log("MCP tool result:", JSON.stringify(toolResult));
-          
-          const resultMsg = `✅ Tool Result:\n${JSON.stringify(toolResult, null, 2)}`;
-          fullResponse += resultMsg;
-          
-          await stream.send({
-            type: "chunk",
-            content: resultMsg
-          });
-        } catch (toolError) {
-          console.error("MCP tool error:", toolError);
-          const errorMsg = `❌ Error calling MCP tool: ${toolError instanceof Error ? toolError.message : "Unknown error"}\n\nStack: ${toolError instanceof Error ? toolError.stack : ""}`;
-          fullResponse += errorMsg;
-          await stream.send({
-            type: "chunk",
-            content: errorMsg
-          });
+        // Define fallback models for different tools
+        const fallbackModels: Record<string, string[]> = {
+          videoInference: ["google:3@1", "klingai:1@2", "minimax:3@1"],
+          imageInference: ["runware:100@1", "civitai:4201@130090", "civitai:139562@297320"]
+        };
+
+        let toolResult: unknown = null;
+        let lastError: Error | null = null;
+        const maxRetries = 3;
+        
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            const currentArgs = { ...mcpCheck.args };
+            
+            // Use fallback model on retry
+            if (attempt > 0 && fallbackModels[mcpCheck.toolName]) {
+              const fallbackModel = fallbackModels[mcpCheck.toolName][attempt];
+              if (fallbackModel) {
+                currentArgs.model = fallbackModel;
+                const retryMsg = `🔄 Retry ${attempt}/${maxRetries - 1} with model: ${fallbackModel}\n\n`;
+                fullResponse += retryMsg;
+                await stream.send({
+                  type: "chunk",
+                  content: retryMsg
+                });
+              }
+            }
+            
+            console.log(`Calling MCP tool (attempt ${attempt + 1}):`, mcpCheck.toolName, "with args:", currentArgs);
+            toolResult = await mcpClient.callTool(mcpCheck.toolName, currentArgs || {});
+            console.log("MCP tool result:", JSON.stringify(toolResult));
+            
+            const resultMsg = `✅ Tool Result:\n${JSON.stringify(toolResult, null, 2)}`;
+            fullResponse += resultMsg;
+            
+            await stream.send({
+              type: "chunk",
+              content: resultMsg
+            });
+            break; // Success - exit retry loop
+            
+          } catch (toolError) {
+            lastError = toolError instanceof Error ? toolError : new Error(String(toolError));
+            console.error(`MCP tool error (attempt ${attempt + 1}):`, lastError);
+            
+            // If this is the last attempt, show the error
+            if (attempt === maxRetries - 1) {
+              const errorMsg = `❌ Error after ${maxRetries} attempts: ${lastError.message}\n\n`;
+              fullResponse += errorMsg;
+              await stream.send({
+                type: "chunk",
+                content: errorMsg
+              });
+            }
+          }
         }
       } else {
         console.log("Using OpenRouter for message:", req.content);
