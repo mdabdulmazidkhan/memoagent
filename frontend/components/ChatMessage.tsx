@@ -26,7 +26,7 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
         {isAssistant ? <Bot className="w-5 h-5" /> : <User className="w-5 h-5" />}
       </div>
       <div className="flex-1 min-w-0">
-        <div className="prose prose-sm dark:prose-invert max-w-none">
+        <div className="prose prose-sm dark:prose-invert max-w-none text-foreground whitespace-pre-wrap">
           {message.content}
           {isStreaming && (
             <span className="inline-block w-2 h-4 ml-1 bg-foreground animate-pulse" />
