@@ -1,24 +1,36 @@
 import { api } from "encore.dev/api";
+import { mcpClient } from "./client";
 
 interface Tool {
   name: string;
-  description: string;
-  parameters?: Record<string, unknown>;
+  description?: string;
+  inputSchema?: {
+    type: string;
+    properties?: Record<string, unknown>;
+    required?: string[];
+  };
 }
 
 interface ListToolsResponse {
   tools: Tool[];
+  connected: boolean;
 }
 
-// Lists available MCP tools
 export const listTools = api<void, ListToolsResponse>(
   { expose: true, method: "GET", path: "/mcp/tools" },
   async () => {
-    // TODO: Implement actual MCP client connection
-    // This would require the MCP SDK and WebSocket/SSE connection
-    // For now, returning empty array as placeholder
-    return {
-      tools: []
-    };
+    try {
+      const tools = await mcpClient.getTools();
+      return {
+        tools,
+        connected: mcpClient.isConnected()
+      };
+    } catch (error) {
+      console.error("Error listing MCP tools:", error);
+      return {
+        tools: [],
+        connected: false
+      };
+    }
   }
 );

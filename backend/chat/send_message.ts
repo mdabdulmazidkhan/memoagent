@@ -4,6 +4,7 @@ import { getAuthData } from "~encore/auth";
 import db from "../db";
 import { streamChatCompletion } from "./openrouter";
 import type { OpenRouterMessage } from "./openrouter";
+import { mcpClient } from "../mcp/client";
 
 interface SendMessageRequest {
   conversationId: string;
@@ -11,9 +12,35 @@ interface SendMessageRequest {
 }
 
 interface MessageChunk {
-  type: "chunk" | "done";
+  type: "chunk" | "done" | "tool_call";
   content?: string;
   messageId?: string;
+  toolName?: string;
+  toolResult?: unknown;
+}
+
+async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boolean; toolName?: string; args?: Record<string, unknown> }> {
+  try {
+    const tools = await mcpClient.getTools();
+    
+    for (const tool of tools) {
+      const toolNameLower = tool.name.toLowerCase();
+      const messageLower = userMessage.toLowerCase();
+      
+      if (messageLower.includes(toolNameLower) || 
+          (tool.description && messageLower.includes(tool.description.toLowerCase().split(' ')[0]))) {
+        return {
+          shouldUseMCP: true,
+          toolName: tool.name,
+          args: {}
+        };
+      }
+    }
+  } catch (error) {
+    console.error("Error checking MCP tools:", error);
+  }
+  
+  return { shouldUseMCP: false };
 }
 
 export const sendMessage = api.streamOut<SendMessageRequest, MessageChunk>(
@@ -55,17 +82,41 @@ export const sendMessage = api.streamOut<SendMessageRequest, MessageChunk>(
       content: msg.content
     }));
 
-    // Stream response from OpenRouter
     const assistantMessageId = randomUUID();
     let fullResponse = "";
 
     try {
-      for await (const chunk of streamChatCompletion(messages)) {
-        fullResponse += chunk;
+      const mcpCheck = await checkMCPTools(req.content);
+      
+      if (mcpCheck.shouldUseMCP && mcpCheck.toolName) {
         await stream.send({
           type: "chunk",
-          content: chunk
+          content: `Using MCP tool: ${mcpCheck.toolName}...\n\n`
         });
+
+        try {
+          const toolResult = await mcpClient.callTool(mcpCheck.toolName, mcpCheck.args || {});
+          fullResponse = `Tool: ${mcpCheck.toolName}\n\nResult:\n${JSON.stringify(toolResult, null, 2)}`;
+          
+          await stream.send({
+            type: "chunk",
+            content: fullResponse
+          });
+        } catch (toolError) {
+          fullResponse = `Error calling MCP tool: ${toolError instanceof Error ? toolError.message : "Unknown error"}`;
+          await stream.send({
+            type: "chunk",
+            content: fullResponse
+          });
+        }
+      } else {
+        for await (const chunk of streamChatCompletion(messages)) {
+          fullResponse += chunk;
+          await stream.send({
+            type: "chunk",
+            content: chunk
+          });
+        }
       }
 
       // Save assistant message
