@@ -69,23 +69,51 @@ async function callRunwareAPI(tasks: RunwareTask[]): Promise<RunwareResponse> {
 }
 
 async function pollTaskCompletion(taskUUID: string, maxAttempts: number = 60): Promise<RunwareResponse["data"][0]> {
+  console.log(`[Polling] Starting poll for taskUUID: ${taskUUID}, max attempts: ${maxAttempts}`);
+  
   for (let i = 0; i < maxAttempts; i++) {
-    const response = await callRunwareAPI([{
-      taskType: "getResponse",
-      taskUUID: taskUUID
-    }]);
+    console.log(`[Polling] Attempt ${i + 1}/${maxAttempts} for task ${taskUUID}`);
     
-    if (response.data && response.data.length > 0) {
-      const result = response.data[0];
-      if (result.status === "success" || result.imageURL || result.videoURL || result.status === "failed") {
-        return result;
+    try {
+      const response = await callRunwareAPI([{
+        taskType: "getResponse",
+        taskUUID: taskUUID
+      }]);
+      
+      console.log(`[Polling] Response for attempt ${i + 1}:`, JSON.stringify(response, null, 2));
+      
+      if (response.data && response.data.length > 0) {
+        const result = response.data[0];
+        
+        // Check if task is complete
+        if (result.imageURL || result.videoURL) {
+          console.log(`[Polling] Task ${taskUUID} completed successfully with URL`);
+          return result;
+        }
+        
+        if (result.status === "failed") {
+          console.error(`[Polling] Task ${taskUUID} failed:`, result);
+          throw new Error(`Task failed: ${JSON.stringify(result)}`);
+        }
+        
+        // Still processing
+        console.log(`[Polling] Task ${taskUUID} still processing, status: ${result.status || 'unknown'}`);
+      } else {
+        console.log(`[Polling] No data in response for task ${taskUUID}`);
+      }
+    } catch (error) {
+      console.error(`[Polling] Error on attempt ${i + 1}:`, error);
+      // Continue polling unless it's the last attempt
+      if (i === maxAttempts - 1) {
+        throw error;
       }
     }
     
+    // Wait before next poll
     await new Promise(resolve => setTimeout(resolve, 2000));
   }
   
-  throw new Error("Task timeout - generation took too long");
+  throw new Error(`Task timeout after ${maxAttempts} attempts - generation took too long`);
 }
 
 // 1. IMAGE INFERENCE (Full-featured)
