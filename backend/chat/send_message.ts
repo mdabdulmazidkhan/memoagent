@@ -95,7 +95,7 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
           messageLower.includes("replace part")) {
         return {
           shouldUseMCP: true,
-          toolName: "inpaintImage",
+          toolName: "imageInference",
           args: {
             prompt: userMessage,
             seedImage: "placeholder",
@@ -108,7 +108,7 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
       if (messageLower.includes("background") && messageLower.includes("remove")) {
         return {
           shouldUseMCP: true,
-          toolName: "removeBackground",
+          toolName: "imageBackgroundRemoval",
           args: { imageURL: "placeholder" }
         };
       }
@@ -119,23 +119,17 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
         const factor = messageLower.includes("4x") ? 4 : messageLower.includes("3x") ? 3 : 2;
         return {
           shouldUseMCP: true,
-          toolName: "upscaleImage",
+          toolName: "imageUpscale",
           args: { imageURL: "placeholder", upscaleFactor: factor }
         };
       }
       
-      // ControlNet preprocessing
-      if (messageLower.includes("controlnet") || messageLower.includes("edge detection") || 
-          messageLower.includes("depth map") || messageLower.includes("pose detection")) {
-        let preprocessor = "canny";
-        if (messageLower.includes("depth")) preprocessor = "depth";
-        else if (messageLower.includes("pose")) preprocessor = "pose";
-        else if (messageLower.includes("line") || messageLower.includes("mlsd")) preprocessor = "mlsd";
-        
+      // Image masking
+      if (messageLower.includes("mask") || messageLower.includes("segment")) {
         return {
           shouldUseMCP: true,
-          toolName: "controlnetPreprocess",
-          args: { imageURL: "placeholder", preprocessor }
+          toolName: "imageMasking",
+          args: { imageURL: "placeholder", prompt: "object to mask" }
         };
       }
       
@@ -158,12 +152,13 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
         
         return {
           shouldUseMCP: true,
-          toolName: "generateImageFromText",
+          toolName: "imageInference",
           args: { 
             prompt: prompt,
             model: model,
             width: 512,
             height: 512,
+            numberResults: 1,
             steps: 20
           }
         };
