@@ -2,8 +2,7 @@ import { secret } from "encore.dev/config";
 import { 
   MODEL_DIMENSIONS, 
   validateVideoDimensions, 
-  getSupportedVideoModels,
-  pollVideoCompletion 
+  getSupportedVideoModels
 } from "./runware_utils";
 
 const runwareApiKey = secret("RunwareApiKey");

@@ -271,7 +271,29 @@ export const sendMessage = api.streamOut<SendMessageRequest, MessageChunk>(
             toolResult = await mcpClient.callTool(mcpCheck.toolName, currentArgs || {});
             console.log("MCP tool result:", JSON.stringify(toolResult));
             
-            const resultMsg = `✅ Tool Result:\n${JSON.stringify(toolResult, null, 2)}`;
+            // Format result as media
+            let resultMsg = "";
+            
+            if (typeof toolResult === "string") {
+              // Single URL returned
+              if (toolResult.includes("mp4") || toolResult.includes("video")) {
+                resultMsg = `✅ Video generated:\n\n![Video](${toolResult})`;
+              } else if (toolResult.includes("png") || toolResult.includes("jpg") || toolResult.includes("image")) {
+                resultMsg = `✅ Image generated:\n\n![Image](${toolResult})`;
+              } else {
+                resultMsg = `✅ Result: ${toolResult}`;
+              }
+            } else if (Array.isArray(toolResult)) {
+              // Multiple URLs returned
+              resultMsg = `✅ Generated ${toolResult.length} image(s):\n\n`;
+              toolResult.forEach((url: string, idx: number) => {
+                resultMsg += `![Image ${idx + 1}](${url})\n\n`;
+              });
+            } else {
+              // Other result types
+              resultMsg = `✅ Result:\n${JSON.stringify(toolResult, null, 2)}`;
+            }
+            
             fullResponse += resultMsg;
             
             await stream.send({

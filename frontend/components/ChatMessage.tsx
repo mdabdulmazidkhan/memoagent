@@ -7,6 +7,63 @@ interface ChatMessageProps {
   isStreaming?: boolean;
 }
 
+function renderContent(content: string) {
+  const parts = [];
+  let lastIndex = 0;
+  
+  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  let match;
+  
+  while ((match = imageRegex.exec(content)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(
+        <span key={`text-${lastIndex}`}>
+          {content.substring(lastIndex, match.index)}
+        </span>
+      );
+    }
+    
+    const altText = match[1];
+    const url = match[2];
+    
+    if (url.includes("mp4") || url.includes("video") || altText.toLowerCase().includes("video")) {
+      parts.push(
+        <video 
+          key={`video-${match.index}`}
+          src={url} 
+          controls 
+          className="max-w-full rounded-lg my-2"
+          style={{ maxHeight: "500px" }}
+        >
+          Your browser does not support the video tag.
+        </video>
+      );
+    } else {
+      parts.push(
+        <img 
+          key={`img-${match.index}`}
+          src={url} 
+          alt={altText} 
+          className="max-w-full rounded-lg my-2"
+          style={{ maxHeight: "500px" }}
+        />
+      );
+    }
+    
+    lastIndex = match.index + match[0].length;
+  }
+  
+  if (lastIndex < content.length) {
+    parts.push(
+      <span key={`text-${lastIndex}`}>
+        {content.substring(lastIndex)}
+      </span>
+    );
+  }
+  
+  return parts.length > 0 ? parts : content;
+}
+
 export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
   const isAssistant = message.role === "assistant";
 
@@ -27,7 +84,7 @@ export function ChatMessage({ message, isStreaming }: ChatMessageProps) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-foreground whitespace-pre-wrap leading-relaxed">
-          {message.content}
+          {renderContent(message.content)}
           {isStreaming && (
             <span className="inline-block w-2 h-4 ml-1 bg-foreground animate-pulse" />
           )}
