@@ -81,16 +81,19 @@ export function ChatInterface({ conversationId, onConversationCreated }: ChatInt
         content
       });
 
+      let accumulatedContent = "";
+
       for await (const chunk of stream) {
         if (chunk && chunk.type === "chunk" && chunk.content) {
-          setStreamingContent((prev: string) => prev + chunk.content);
+          accumulatedContent += chunk.content;
+          setStreamingContent(accumulatedContent);
         } else if (chunk && chunk.type === "done") {
-          if (streamingContent) {
+          if (accumulatedContent) {
             const assistantMessage: Message = {
               id: chunk.messageId || Date.now().toString(),
               conversationId: currentConversationId,
               role: "assistant",
-              content: streamingContent,
+              content: accumulatedContent,
               createdAt: new Date()
             };
             setMessages((prev: Message[]) => [...prev, assistantMessage]);
