@@ -118,28 +118,39 @@ export const sendMessage = api.streamOut<SendMessageRequest, MessageChunk>(
     try {
       const mcpCheck = await checkMCPTools(req.content);
       
+      console.log("MCP Check result:", JSON.stringify(mcpCheck));
+      
       if (mcpCheck.shouldUseMCP && mcpCheck.toolName) {
+        const statusMsg = `🔧 Using MCP tool: ${mcpCheck.toolName}\n\n`;
+        fullResponse += statusMsg;
         await stream.send({
           type: "chunk",
-          content: `Using MCP tool: ${mcpCheck.toolName}...\n\n`
+          content: statusMsg
         });
 
         try {
+          console.log("Calling MCP tool:", mcpCheck.toolName, "with args:", mcpCheck.args);
           const toolResult = await mcpClient.callTool(mcpCheck.toolName, mcpCheck.args || {});
-          fullResponse = `Tool: ${mcpCheck.toolName}\n\nResult:\n${JSON.stringify(toolResult, null, 2)}`;
+          console.log("MCP tool result:", JSON.stringify(toolResult));
+          
+          const resultMsg = `✅ Tool Result:\n${JSON.stringify(toolResult, null, 2)}`;
+          fullResponse += resultMsg;
           
           await stream.send({
             type: "chunk",
-            content: fullResponse
+            content: resultMsg
           });
         } catch (toolError) {
-          fullResponse = `Error calling MCP tool: ${toolError instanceof Error ? toolError.message : "Unknown error"}`;
+          console.error("MCP tool error:", toolError);
+          const errorMsg = `❌ Error calling MCP tool: ${toolError instanceof Error ? toolError.message : "Unknown error"}\n\nStack: ${toolError instanceof Error ? toolError.stack : ""}`;
+          fullResponse += errorMsg;
           await stream.send({
             type: "chunk",
-            content: fullResponse
+            content: errorMsg
           });
         }
       } else {
+        console.log("Using OpenRouter for message:", req.content);
         for await (const chunk of streamChatCompletion(messages)) {
           fullResponse += chunk;
           await stream.send({
