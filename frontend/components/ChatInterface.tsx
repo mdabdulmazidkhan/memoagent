@@ -145,7 +145,17 @@ export function ChatInterface({ conversationId, onConversationCreated }: ChatInt
       </div>
 
       {/* Input Area */}
-      <ChatInput onSend={handleSendMessage} disabled={isLoading} />
+      <ChatInput 
+        conversationId={conversationId || ""}
+        onSend={handleSendMessage} 
+        onFileUpload={(videoNo) => {
+          toast({
+            title: "Video uploaded",
+            description: `Video ${videoNo} is being processed. You can now ask questions about it!`
+          });
+        }}
+        disabled={isLoading} 
+      />
     </div>
   );
 }

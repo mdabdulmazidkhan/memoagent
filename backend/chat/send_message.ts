@@ -132,6 +132,23 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
       }
     }
     
+    // VIDEO EDITING with uploaded videos
+    if ((messageLower.includes("edit") || messageLower.includes("add") || messageLower.includes("change")) && 
+        (messageLower.includes("video") || messageLower.includes("caption") || messageLower.includes("subtitle"))) {
+      const videoIdMatch = userMessage.match(/VI\d+/);
+      if (videoIdMatch) {
+        return {
+          shouldUseMCP: true,
+          client: "memories",
+          toolName: "chatWithVideos",
+          args: {
+            videoNos: [videoIdMatch[0]],
+            prompt: userMessage + "\n\nPlease provide specific editing instructions or timestamps for the changes requested."
+          }
+        };
+      }
+    }
+    
     // RUNWARE VIDEO GENERATION
     if (messageLower.includes("video")) {
       if (messageLower.includes("generate") || messageLower.includes("create") || messageLower.includes("make")) {
@@ -327,6 +344,18 @@ export const sendMessage = api.streamOut<SendMessageRequest, MessageChunk>(
       ORDER BY created_at ASC
     `;
 
+    // Get uploaded videos for this conversation
+    const uploadedVideos = await db.queryAll<{
+      video_no: string;
+      video_name: string;
+      status: string;
+    }>`
+      SELECT video_no, video_name, status
+      FROM conversation_videos
+      WHERE conversation_id = ${req.conversationId}
+      ORDER BY upload_time DESC
+    `;
+
     const messages: OpenRouterMessage[] = history.map(msg => ({
       role: msg.role as "user" | "assistant" | "system",
       content: msg.content
@@ -336,7 +365,46 @@ export const sendMessage = api.streamOut<SendMessageRequest, MessageChunk>(
     let fullResponse = "";
 
     try {
-      const mcpCheck = await checkMCPTools(req.content);
+      let mcpCheck = await checkMCPTools(req.content);
+      
+      // If user asks about uploaded videos without specifying ID, auto-inject video IDs
+      if (mcpCheck.shouldUseMCP && mcpCheck.client === "memories" && uploadedVideos.length > 0) {
+        const toolName = mcpCheck.toolName;
+        
+        // Auto-inject video IDs for chat/transcription/summary tools
+        if ((toolName === "chatWithVideos" || toolName === "getVideoTranscription" || 
+             toolName === "getAudioTranscription" || toolName === "generateSummary") &&
+            (!mcpCheck.args?.videoNos && !mcpCheck.args?.videoNo)) {
+          
+          const videoNos = uploadedVideos
+            .filter(v => v.status === "PARSE" || v.status === "UNPARSE")
+            .map(v => v.video_no);
+          
+          if (videoNos.length > 0) {
+            if (toolName === "chatWithVideos") {
+              mcpCheck.args = {
+                ...mcpCheck.args,
+                videoNos: videoNos,
+                prompt: req.content,
+                uniqueId: auth.userID
+              };
+            } else {
+              mcpCheck.args = {
+                ...mcpCheck.args,
+                videoNo: videoNos[0], // Use most recent
+                uniqueId: auth.userID
+              };
+            }
+            
+            const contextMsg = `📹 Using uploaded video(s): ${videoNos.join(", ")}\n\n`;
+            fullResponse += contextMsg;
+            await stream.send({
+              type: "chunk",
+              content: contextMsg
+            });
+          }
+        }
+      }
       
       console.log("MCP Check result:", JSON.stringify(mcpCheck));
       

@@ -99,6 +99,38 @@ async function callMemoriesAPI(
   return result;
 }
 
+export async function uploadVideoFile(formData: FormData): Promise<VideoUploadResponse> {
+  console.log(`[Memories.ai] Uploading video file`);
+
+  const apiKey = memoriesApiKey();
+  const url = `${BASE_URL}/upload`;
+
+  console.log(`[Memories.ai] POST ${url}`);
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: apiKey,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[Memories.ai] Error ${response.status}:`, errorText);
+    throw new Error(`Memories.ai API error: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json() as MemoriesResponse;
+  console.log(`[Memories.ai] Response:`, JSON.stringify(result, null, 2));
+
+  if (result.code !== "0000" && result.failed) {
+    throw new Error(`Memories.ai error: ${result.msg}`);
+  }
+
+  return result.data as VideoUploadResponse;
+}
+
 export async function uploadVideoFromURL(params: {
   url: string;
   uniqueId?: string;
@@ -303,6 +335,17 @@ interface MCPTool {
 class MemoriesAIMCPClient {
   private tools: MCPTool[] = [
     {
+      name: "uploadVideoFile",
+      description: "Upload a video file directly from the user's device",
+      inputSchema: {
+        type: "object",
+        properties: {
+          formData: { type: "object", description: "FormData with video file" },
+        },
+        required: ["formData"],
+      },
+    },
+    {
       name: "uploadVideoFromURL",
       description: "Upload a video from a direct streaming URL (mp4, etc.)",
       inputSchema: {
@@ -411,6 +454,9 @@ class MemoriesAIMCPClient {
 
   async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     switch (name) {
+      case "uploadVideoFile":
+        return await uploadVideoFile(args.formData as FormData);
+
       case "uploadVideoFromURL":
         return await uploadVideoFromURL(args as Parameters<typeof uploadVideoFromURL>[0]);
 
