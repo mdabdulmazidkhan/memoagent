@@ -262,7 +262,7 @@ export async function videoInference(params: {
   
   // Smart model selection
   const isI2V = params.frameImages && params.frameImages.length > 0;
-  const defaultModel = isI2V ? "klingai:5@2" : "google:3@1";
+  const defaultModel = isI2V ? "klingai:5@2" : "bytedance:1@1";  // Seedance 1.0 Lite for T2V
   const model = params.model || defaultModel;
   
   console.log(`[VideoInference] Selected model: ${model}, isI2V: ${isI2V}`);

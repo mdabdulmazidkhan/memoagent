@@ -52,9 +52,9 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
           toolName: "videoInference",
           args: { 
             prompt: prompt,
-            model: "google:3@1",  // Veo 3.0 Fast (default T2V)
-            width: 1280,
-            height: 720,
+            model: "bytedance:1@1",  // Seedance 1.0 Lite
+            width: 864,
+            height: 480,
             duration: 5,
             fps: 24
           }
@@ -241,7 +241,7 @@ export const sendMessage = api.streamOut<SendMessageRequest, MessageChunk>(
 
         // Define fallback models for different tools
         const fallbackModels: Record<string, string[]> = {
-          videoInference: ["google:3@1", "klingai:1@2", "minimax:3@1"],
+          videoInference: ["bytedance:1@1", "bytedance:2@1", "klingai:1@2"],
           imageInference: ["runware:100@1", "civitai:4201@130090", "civitai:139562@297320"]
         };
 
