@@ -34,24 +34,34 @@ interface RunwareResponse {
 }
 
 async function callRunwareAPI(tasks: RunwareTask[]): Promise<RunwareResponse> {
+  const apiKey = runwareApiKey();
+  console.log(`[Runware API] Making request to ${DEFAULT_API_BASE_URL}`);
+  console.log(`[Runware API] API Key present: ${apiKey ? 'YES' : 'NO'}, Length: ${apiKey?.length || 0}`);
+  console.log(`[Runware API] Tasks:`, JSON.stringify(tasks, null, 2));
+  
   const response = await fetch(DEFAULT_API_BASE_URL, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${runwareApiKey()}`,
+      "Authorization": `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       "Accept-Encoding": "gzip, deflate, br, zstd"
     },
     body: JSON.stringify(tasks)
   });
 
+  console.log(`[Runware API] Response status: ${response.status}`);
+
   if (!response.ok) {
     const error = await response.text();
+    console.error(`[Runware API] Error response:`, error);
     throw new Error(`Runware API error: ${response.status} - ${error}`);
   }
 
   const result = await response.json() as RunwareResponse;
+  console.log(`[Runware API] Success response:`, JSON.stringify(result, null, 2));
   
   if (result.errors && result.errors.length > 0) {
+    console.error(`[Runware API] API returned errors:`, result.errors);
     throw new Error(result.errors[0].message);
   }
   
@@ -220,19 +230,25 @@ export async function videoInference(params: {
 }): Promise<string> {
   const taskUUID = crypto.randomUUID();
   
+  console.log(`[VideoInference] Starting video generation with params:`, params);
+  
   // Smart model selection
   const isI2V = params.frameImages && params.frameImages.length > 0;
   const defaultModel = isI2V ? "klingai:5@2" : "google:3@1";
   const model = params.model || defaultModel;
   
+  console.log(`[VideoInference] Selected model: ${model}, isI2V: ${isI2V}`);
+  
   // Get model dimensions
   const modelDims = MODEL_DIMENSIONS[model];
   if (!modelDims) {
-    throw new Error(`Model '${model}' not found in supported video models`);
+    throw new Error(`Model '${model}' not found in supported video models. Available models: ${Object.keys(MODEL_DIMENSIONS).join(", ")}`);
   }
   
   const width = params.width || modelDims.width;
   const height = params.height || modelDims.height;
+  
+  console.log(`[VideoInference] Using dimensions: ${width}x${height}`);
   
   // Validate dimensions
   const [isValid, errorMsg] = validateVideoDimensions(model, width, height);
@@ -255,12 +271,24 @@ export async function videoInference(params: {
     ...(params.frameImages && { frameImages: params.frameImages })
   };
 
-  await callRunwareAPI([task]);
+  console.log(`[VideoInference] Sending task to Runware API:`, JSON.stringify(task, null, 2));
+  
+  const apiResponse = await callRunwareAPI([task]);
+  console.log(`[VideoInference] API Response:`, JSON.stringify(apiResponse, null, 2));
+  
+  console.log(`[VideoInference] Starting polling for taskUUID: ${taskUUID}`);
   const result = await pollTaskCompletion(taskUUID, 150); // 5 min timeout for videos
   
-  if (result.videoURL) return result.videoURL;
-  if (result.status === "failed") throw new Error("Video generation failed");
-  throw new Error("No video generated");
+  console.log(`[VideoInference] Poll result:`, JSON.stringify(result, null, 2));
+  
+  if (result.videoURL) {
+    console.log(`[VideoInference] SUCCESS! Video URL: ${result.videoURL}`);
+    return result.videoURL;
+  }
+  if (result.status === "failed") {
+    throw new Error(`Video generation failed. Details: ${JSON.stringify(result)}`);
+  }
+  throw new Error(`No video generated. Result: ${JSON.stringify(result)}`);
 }
 
 // 8. IMAGE UPLOAD
