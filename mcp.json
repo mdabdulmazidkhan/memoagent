@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "Activepieces": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://cloud.activepieces.com/api/v1/mcp/NXArRv3sXRsjLywAmthd9/sse"
+      ]
+    }
+  }
+}
