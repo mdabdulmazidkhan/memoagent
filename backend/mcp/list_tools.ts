@@ -1,5 +1,5 @@
 import { api } from "encore.dev/api";
-import { mcpClient } from "./client";
+import { mcpClient } from "./runware";
 
 interface Tool {
   name: string;

@@ -1,11 +1,11 @@
 {
   "mcpServers": {
-    "Activepieces": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "mcp-remote",
-        "https://cloud.activepieces.com/api/v1/mcp/NXArRv3sXRsjLywAmthd9/sse"
+    "Runware": {
+      "description": "Custom Runware integration for AI-powered image generation, background removal, and upscaling",
+      "tools": [
+        "generateImageFromText",
+        "removeBackground",
+        "upscaleImage"
       ]
     }
   }

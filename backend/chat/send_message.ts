@@ -4,7 +4,7 @@ import { getAuthData } from "~encore/auth";
 import db from "../db";
 import { streamChatCompletion } from "./openrouter";
 import type { OpenRouterMessage } from "./openrouter";
-import { mcpClient } from "../mcp/client";
+import { mcpClient } from "../mcp/runware";
 
 interface SendMessageRequest {
   conversationId: string;
@@ -31,38 +31,40 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
       // Check if it's image generation from text
       if (messageLower.includes("generate") || messageLower.includes("create") || 
           messageLower.includes("make") || messageLower.includes("of")) {
-        const textToImageTool = tools.find(t => t.name.includes("generateImagesFromText"));
-        if (textToImageTool) {
-          return {
-            shouldUseMCP: true,
-            toolName: textToImageTool.name,
-            args: { instructions: userMessage }
-          };
+        
+        // Extract the prompt - remove the command words
+        let prompt = userMessage;
+        const prefixes = ["generate", "create", "make", "draw"];
+        for (const prefix of prefixes) {
+          const regex = new RegExp(`${prefix}\\s+(an?\\s+)?(image|picture|photo)\\s+(of\\s+)?`, "i");
+          prompt = prompt.replace(regex, "").trim();
         }
+        
+        return {
+          shouldUseMCP: true,
+          toolName: "generateImageFromText",
+          args: { 
+            prompt: prompt,
+            model: "runware:100@1"  // FLUX Schnell - fast and high quality
+          }
+        };
       }
       
       // Check for background removal
-      if (messageLower.includes("background") || messageLower.includes("remove")) {
-        const bgRemovalTool = tools.find(t => t.name.includes("imageBackgroundRemoval"));
-        if (bgRemovalTool) {
-          return {
-            shouldUseMCP: true,
-            toolName: bgRemovalTool.name,
-            args: { instructions: userMessage }
-          };
-        }
-      }
-    }
-    
-    // Check for video generation
-    if (messageLower.includes("video") && (messageLower.includes("generate") || 
-        messageLower.includes("create") || messageLower.includes("make"))) {
-      const videoTool = tools.find(t => t.name.includes("generateVideoFromText"));
-      if (videoTool) {
+      if (messageLower.includes("background") && messageLower.includes("remove")) {
         return {
           shouldUseMCP: true,
-          toolName: videoTool.name,
-          args: { instructions: userMessage }
+          toolName: "removeBackground",
+          args: { imageURL: "placeholder" }  // User would need to provide URL
+        };
+      }
+      
+      // Check for upscale
+      if (messageLower.includes("upscale") || messageLower.includes("enhance") || messageLower.includes("improve")) {
+        return {
+          shouldUseMCP: true,
+          toolName: "upscaleImage",
+          args: { imageURL: "placeholder", upscaleFactor: 2 }
         };
       }
     }
