@@ -8,10 +8,11 @@ interface ChatInputProps {
   conversationId: string;
   onSend: (content: string) => void;
   onFileUpload?: (videoNo: string) => void;
+  onConversationCreated?: (id: string) => void;
   disabled?: boolean;
 }
 
-export function ChatInput({ conversationId, onSend, onFileUpload, disabled }: ChatInputProps) {
+export function ChatInput({ conversationId, onSend, onFileUpload, onConversationCreated, disabled }: ChatInputProps) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -43,6 +44,7 @@ export function ChatInput({ conversationId, onSend, onFileUpload, disabled }: Ch
         <FileUpload 
           conversationId={conversationId} 
           onUploadComplete={onFileUpload}
+          onConversationCreated={onConversationCreated}
         />
         <div className="flex gap-2">
           <Textarea

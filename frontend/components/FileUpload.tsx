@@ -2,10 +2,12 @@ import { useState } from "react";
 import { Upload, X, Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@clerk/clerk-react";
+import { useBackend } from "@/hooks/useBackend";
 
 interface FileUploadProps {
   conversationId: string;
   onUploadComplete?: (videoNo: string) => void;
+  onConversationCreated?: (id: string) => void;
 }
 
 interface UploadedFile {
@@ -15,9 +17,10 @@ interface UploadedFile {
   error?: string;
 }
 
-export function FileUpload({ conversationId, onUploadComplete }: FileUploadProps) {
+export function FileUpload({ conversationId, onUploadComplete, onConversationCreated }: FileUploadProps) {
   const [uploading, setUploading] = useState<UploadedFile[]>([]);
   const { getToken } = useAuth();
+  const backend = useBackend();
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
@@ -30,13 +33,33 @@ export function FileUpload({ conversationId, onUploadComplete }: FileUploadProps
 
     setUploading(prev => [...prev, ...newUploads]);
 
+    // Create conversation if needed
+    let currentConversationId = conversationId;
+    if (!currentConversationId || currentConversationId === "") {
+      try {
+        const conversation = await backend.chat.createConversation({});
+        currentConversationId = conversation.id;
+        if (onConversationCreated) {
+          onConversationCreated(conversation.id);
+        }
+      } catch (error) {
+        console.error("Failed to create conversation:", error);
+        setUploading(prev => prev.map(u => ({
+          ...u,
+          status: "error" as const,
+          error: "Failed to create conversation"
+        })));
+        return;
+      }
+    }
+
     for (let i = 0; i < newUploads.length; i++) {
       const upload = newUploads[i];
       
       try {
         const formData = new FormData();
         formData.append("file", upload.file);
-        formData.append("conversationId", conversationId);
+        formData.append("conversationId", currentConversationId);
 
         const token = await getToken();
         

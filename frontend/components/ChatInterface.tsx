@@ -147,7 +147,8 @@ export function ChatInterface({ conversationId, onConversationCreated }: ChatInt
       {/* Input Area */}
       <ChatInput 
         conversationId={conversationId || ""}
-        onSend={handleSendMessage} 
+        onSend={handleSendMessage}
+        onConversationCreated={onConversationCreated}
         onFileUpload={(videoNo) => {
           toast({
             title: "Video uploaded",
