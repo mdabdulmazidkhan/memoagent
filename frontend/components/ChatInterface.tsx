@@ -117,9 +117,9 @@ export function ChatInterface({ conversationId, onConversationCreated }: ChatInt
       <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="max-w-3xl mx-auto space-y-4">
           {messages.length === 0 && !streamingContent && (
-            <div className="text-center text-muted-foreground py-12">
-              <h2 className="text-2xl font-semibold mb-2">Start a conversation</h2>
-              <p>Ask me anything!</p>
+            <div className="text-center py-12">
+              <h2 className="text-2xl font-semibold mb-2 text-foreground">Start a conversation</h2>
+              <p className="text-muted-foreground">Ask me anything!</p>
             </div>
           )}
           {messages.map((message: Message) => (

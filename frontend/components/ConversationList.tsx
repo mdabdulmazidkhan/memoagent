@@ -95,7 +95,7 @@ export function ConversationList({ currentConversationId, onSelectConversation }
               onClick={() => onSelectConversation(conversation.id)}
             >
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{conversation.title}</p>
+                <p className="text-sm font-medium truncate text-foreground">{conversation.title}</p>
                 <p className="text-xs text-muted-foreground">
                   {new Date(conversation.updatedAt).toLocaleDateString()}
                 </p>
