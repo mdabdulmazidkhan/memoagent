@@ -1,6 +1,13 @@
 import { secret } from "encore.dev/config";
+import { 
+  MODEL_DIMENSIONS, 
+  validateVideoDimensions, 
+  getSupportedVideoModels,
+  pollVideoCompletion 
+} from "./runware_utils";
 
 const runwareApiKey = secret("RunwareApiKey");
+const DEFAULT_API_BASE_URL = "https://api.runware.ai/v1";
 
 interface RunwareTask {
   taskType: string;
@@ -20,14 +27,19 @@ interface RunwareResponse {
     status?: string;
     [key: string]: unknown;
   }>;
+  errors?: Array<{
+    message: string;
+    [key: string]: unknown;
+  }>;
 }
 
 async function callRunwareAPI(tasks: RunwareTask[]): Promise<RunwareResponse> {
-  const response = await fetch("https://api.runware.ai/v1", {
+  const response = await fetch(DEFAULT_API_BASE_URL, {
     method: "POST",
     headers: {
+      "Authorization": `Bearer ${runwareApiKey()}`,
       "Content-Type": "application/json",
-      "Authorization": `Bearer ${runwareApiKey()}`
+      "Accept-Encoding": "gzip, deflate, br, zstd"
     },
     body: JSON.stringify(tasks)
   });
@@ -37,11 +49,16 @@ async function callRunwareAPI(tasks: RunwareTask[]): Promise<RunwareResponse> {
     throw new Error(`Runware API error: ${response.status} - ${error}`);
   }
 
-  return await response.json() as RunwareResponse;
+  const result = await response.json() as RunwareResponse;
+  
+  if (result.errors && result.errors.length > 0) {
+    throw new Error(result.errors[0].message);
+  }
+  
+  return result;
 }
 
-// Helper to poll async tasks
-async function pollTask(taskUUID: string, maxAttempts: number = 60): Promise<RunwareResponse["data"][0]> {
+async function pollTaskCompletion(taskUUID: string, maxAttempts: number = 60): Promise<RunwareResponse["data"][0]> {
   for (let i = 0; i < maxAttempts; i++) {
     const response = await callRunwareAPI([{
       taskType: "getResponse",
@@ -50,7 +67,7 @@ async function pollTask(taskUUID: string, maxAttempts: number = 60): Promise<Run
     
     if (response.data && response.data.length > 0) {
       const result = response.data[0];
-      if (result.status === "success" || result.imageURL || result.videoURL) {
+      if (result.status === "success" || result.imageURL || result.videoURL || result.status === "failed") {
         return result;
       }
     }
@@ -61,8 +78,8 @@ async function pollTask(taskUUID: string, maxAttempts: number = 60): Promise<Run
   throw new Error("Task timeout - generation took too long");
 }
 
-// 1. TEXT-TO-IMAGE
-export async function generateImageFromText(params: {
+// 1. IMAGE INFERENCE (Full-featured)
+export async function imageInference(params: {
   prompt: string;
   model?: string;
   negativePrompt?: string;
@@ -72,6 +89,9 @@ export async function generateImageFromText(params: {
   CFGScale?: number;
   seed?: number;
   numberResults?: number;
+  seedImage?: string;
+  strength?: number;
+  maskImage?: string;
 }): Promise<string[]> {
   const task: RunwareTask = {
     taskType: "imageInference",
@@ -86,31 +106,37 @@ export async function generateImageFromText(params: {
     outputType: "URL",
     outputFormat: "PNG",
     ...(params.negativePrompt && { negativePrompt: params.negativePrompt }),
-    ...(params.seed && { seed: params.seed })
+    ...(params.seed && { seed: params.seed }),
+    ...(params.seedImage && { seedImage: params.seedImage }),
+    ...(params.strength && { strength: params.strength }),
+    ...(params.maskImage && { maskImage: params.maskImage })
   };
 
   const result = await callRunwareAPI([task]);
   return result.data.filter(d => d.imageURL).map(d => d.imageURL!);
 }
 
-// 2. IMAGE-TO-IMAGE
-export async function imageToImage(params: {
+// 2. PHOTOMAKER (Subject Personalization)
+export async function photoMaker(params: {
   prompt: string;
-  seedImage: string;
+  inputImages: string[];
   model?: string;
-  strength?: number;
   width?: number;
   height?: number;
+  steps?: number;
 }): Promise<string> {
   const task: RunwareTask = {
     taskType: "imageInference",
     taskUUID: crypto.randomUUID(),
     positivePrompt: params.prompt,
-    seedImage: params.seedImage,
-    model: params.model || "runware:100@1",
-    strength: params.strength || 0.7,
+    model: params.model || "civitai:139562@344487",
     width: params.width || 512,
     height: params.height || 512,
+    steps: params.steps || 20,
+    photoMaker: {
+      inputImages: params.inputImages,
+      mode: "style"
+    },
     outputType: "URL",
     outputFormat: "PNG"
   };
@@ -120,84 +146,8 @@ export async function imageToImage(params: {
   throw new Error("No image generated");
 }
 
-// 3. TEXT-TO-VIDEO
-export async function generateVideoFromText(params: {
-  prompt: string;
-  model?: string;
-  duration?: number;
-  width?: number;
-  height?: number;
-  fps?: number;
-}): Promise<string> {
-  const taskUUID = crypto.randomUUID();
-  const task: RunwareTask = {
-    taskType: "videoInference",
-    taskUUID: taskUUID,
-    positivePrompt: params.prompt,
-    model: params.model || "runware:501@1",  // Kling AI
-    duration: params.duration || 5,
-    width: params.width || 1280,
-    height: params.height || 720,
-    fps: params.fps || 24,
-    deliveryMethod: "async",
-    outputType: "URL",
-    outputFormat: "MP4"
-  };
-
-  await callRunwareAPI([task]);
-  const result = await pollTask(taskUUID);
-  
-  if (result.videoURL) return result.videoURL;
-  throw new Error("No video generated");
-}
-
-// 4. IMAGE-TO-VIDEO
-export async function imageToVideo(params: {
-  imageURL: string;
-  prompt?: string;
-  model?: string;
-  duration?: number;
-}): Promise<string> {
-  const taskUUID = crypto.randomUUID();
-  const task: RunwareTask = {
-    taskType: "videoInference",
-    taskUUID: taskUUID,
-    positivePrompt: params.prompt || "animate this image",
-    model: params.model || "runware:501@1",
-    duration: params.duration || 5,
-    frameImages: [{
-      inputImage: params.imageURL,
-      frame: "first"
-    }],
-    deliveryMethod: "async",
-    outputType: "URL",
-    outputFormat: "MP4"
-  };
-
-  await callRunwareAPI([task]);
-  const result = await pollTask(taskUUID);
-  
-  if (result.videoURL) return result.videoURL;
-  throw new Error("No video generated");
-}
-
-// 5. BACKGROUND REMOVAL
-export async function removeBackground(imageURL: string): Promise<string> {
-  const task: RunwareTask = {
-    taskType: "removeBackground",
-    taskUUID: crypto.randomUUID(),
-    inputImage: imageURL,
-    outputType: "URL",
-    outputFormat: "PNG"
-  };
-
-  const result = await callRunwareAPI([task]);
-  if (result.data[0]?.imageURL) return result.data[0].imageURL;
-  throw new Error("Failed to remove background");
-}
-
-// 6. IMAGE UPSCALE
-export async function upscaleImage(imageURL: string, upscaleFactor: number = 2): Promise<string> {
+// 3. IMAGE UPSCALE
+export async function imageUpscale(imageURL: string, upscaleFactor: number = 2): Promise<string> {
   const task: RunwareTask = {
     taskType: "upscale",
     taskUUID: crypto.randomUUID(),
@@ -212,31 +162,23 @@ export async function upscaleImage(imageURL: string, upscaleFactor: number = 2):
   throw new Error("Failed to upscale image");
 }
 
-// 7. INPAINTING
-export async function inpaintImage(params: {
-  prompt: string;
-  seedImage: string;
-  maskImage: string;
-  model?: string;
-}): Promise<string> {
+// 4. BACKGROUND REMOVAL
+export async function imageBackgroundRemoval(imageURL: string): Promise<string> {
   const task: RunwareTask = {
-    taskType: "imageInference",
+    taskType: "removeBackground",
     taskUUID: crypto.randomUUID(),
-    positivePrompt: params.prompt,
-    seedImage: params.seedImage,
-    maskImage: params.maskImage,
-    model: params.model || "runware:100@1",
+    inputImage: imageURL,
     outputType: "URL",
     outputFormat: "PNG"
   };
 
   const result = await callRunwareAPI([task]);
   if (result.data[0]?.imageURL) return result.data[0].imageURL;
-  throw new Error("No image generated");
+  throw new Error("Failed to remove background");
 }
 
-// 8. IMAGE CAPTION
-export async function captionImage(imageURL: string): Promise<string> {
+// 5. IMAGE CAPTION
+export async function imageCaption(imageURL: string): Promise<string> {
   const task: RunwareTask = {
     taskType: "caption",
     taskUUID: crypto.randomUUID(),
@@ -248,35 +190,109 @@ export async function captionImage(imageURL: string): Promise<string> {
   throw new Error("Failed to caption image");
 }
 
-// 9. PROMPT ENHANCEMENT
-export async function enhancePrompt(prompt: string): Promise<string> {
-  const task: RunwareTask = {
-    taskType: "promptEnhancer",
-    taskUUID: crypto.randomUUID(),
-    inputPrompt: prompt
-  };
-
-  const result = await callRunwareAPI([task]);
-  if (result.data[0]?.text) return result.data[0].text;
-  throw new Error("Failed to enhance prompt");
-}
-
-// 10. CONTROLNET PREPROCESS
-export async function controlnetPreprocess(params: {
+// 6. IMAGE MASKING
+export async function imageMasking(params: {
   imageURL: string;
-  preprocessor: "canny" | "depth" | "pose" | "mlsd" | "hed" | "scribble";
+  prompt: string;
 }): Promise<string> {
   const task: RunwareTask = {
-    taskType: "controlNetPreprocess",
+    taskType: "imageMasking",
     taskUUID: crypto.randomUUID(),
     inputImage: params.imageURL,
-    preprocessor: params.preprocessor,
+    prompt: params.prompt,
     outputType: "URL"
   };
 
   const result = await callRunwareAPI([task]);
   if (result.data[0]?.imageURL) return result.data[0].imageURL;
-  throw new Error("Failed to preprocess image");
+  throw new Error("Failed to create mask");
+}
+
+// 7. VIDEO INFERENCE
+export async function videoInference(params: {
+  prompt: string;
+  model?: string;
+  duration?: number;
+  width?: number;
+  height?: number;
+  fps?: number;
+  frameImages?: Array<{ inputImage: string; frame: string | number }>;
+}): Promise<string> {
+  const taskUUID = crypto.randomUUID();
+  
+  // Smart model selection
+  const isI2V = params.frameImages && params.frameImages.length > 0;
+  const defaultModel = isI2V ? "klingai:5@2" : "google:3@1";
+  const model = params.model || defaultModel;
+  
+  // Get model dimensions
+  const modelDims = MODEL_DIMENSIONS[model];
+  if (!modelDims) {
+    throw new Error(`Model '${model}' not found in supported video models`);
+  }
+  
+  const width = params.width || modelDims.width;
+  const height = params.height || modelDims.height;
+  
+  // Validate dimensions
+  const [isValid, errorMsg] = validateVideoDimensions(model, width, height);
+  if (!isValid) {
+    throw new Error(errorMsg);
+  }
+  
+  const task: RunwareTask = {
+    taskType: "videoInference",
+    taskUUID: taskUUID,
+    positivePrompt: params.prompt,
+    model: model,
+    duration: params.duration || 5,
+    width: width,
+    height: height,
+    fps: params.fps || 24,
+    deliveryMethod: "async",
+    outputType: "URL",
+    outputFormat: "MP4",
+    ...(params.frameImages && { frameImages: params.frameImages })
+  };
+
+  await callRunwareAPI([task]);
+  const result = await pollTaskCompletion(taskUUID, 150); // 5 min timeout for videos
+  
+  if (result.videoURL) return result.videoURL;
+  if (result.status === "failed") throw new Error("Video generation failed");
+  throw new Error("No video generated");
+}
+
+// 8. IMAGE UPLOAD
+export async function imageUpload(inputImage: string): Promise<string> {
+  const task: RunwareTask = {
+    taskType: "imageUpload",
+    taskUUID: crypto.randomUUID(),
+    inputImage: inputImage
+  };
+
+  const result = await callRunwareAPI([task]);
+  if (result.data[0]?.imageUUID) return result.data[0].imageUUID;
+  throw new Error("Failed to upload image");
+}
+
+// 9. MODEL SEARCH
+export async function modelSearch(query: string): Promise<any[]> {
+  // This would use Runware's model search API
+  // For now, return video models matching the query
+  const allModels = getSupportedVideoModels();
+  const results: any[] = [];
+  
+  const queryLower = query.toLowerCase();
+  for (const [provider, models] of Object.entries(allModels)) {
+    for (const model of models) {
+      if (model.toLowerCase().includes(queryLower)) {
+        results.push({ provider, model });
+      }
+    }
+  }
+  
+  return results;
 }
 
 interface MCPTool {
@@ -292,73 +308,58 @@ interface MCPTool {
 class RunwareMCPClient {
   private tools: MCPTool[] = [
     {
-      name: "generateImageFromText",
-      description: "Generate images from text descriptions with customizable parameters",
+      name: "imageInference",
+      description: "Full-featured image generation with support for text-to-image, image-to-image, and inpainting",
       inputSchema: {
         type: "object",
         properties: {
           prompt: { type: "string", description: "Text description of the image" },
-          model: { type: "string", description: "Model AIR (e.g., runware:100@1 for FLUX)" },
+          model: { type: "string", description: "Model AIR (default: runware:100@1)" },
           negativePrompt: { type: "string", description: "What to avoid" },
           width: { type: "number", description: "Width (128-2048, divisible by 64)" },
           height: { type: "number", description: "Height (128-2048, divisible by 64)" },
           steps: { type: "number", description: "Steps (1-100)" },
           CFGScale: { type: "number", description: "Guidance scale (0-50)" },
           seed: { type: "number", description: "Seed for reproducibility" },
-          numberResults: { type: "number", description: "Number of images (1-20)" }
-        },
-        required: ["prompt"]
-      }
-    },
-    {
-      name: "imageToImage",
-      description: "Transform images based on text prompts",
-      inputSchema: {
-        type: "object",
-        properties: {
-          prompt: { type: "string", description: "Transformation description" },
-          seedImage: { type: "string", description: "Source image URL" },
-          model: { type: "string", description: "Model AIR" },
+          numberResults: { type: "number", description: "Number of images (1-20)" },
+          seedImage: { type: "string", description: "Source image for i2i/inpainting" },
           strength: { type: "number", description: "Transformation strength (0-1)" },
-          width: { type: "number", description: "Output width" },
-          height: { type: "number", description: "Output height" }
-        },
-        required: ["prompt", "seedImage"]
-      }
-    },
-    {
-      name: "generateVideoFromText",
-      description: "Generate videos from text descriptions",
-      inputSchema: {
-        type: "object",
-        properties: {
-          prompt: { type: "string", description: "Video description" },
-          model: { type: "string", description: "Model AIR (e.g., runware:501@1 for Kling)" },
-          duration: { type: "number", description: "Duration in seconds (1-10)" },
-          width: { type: "number", description: "Width (256-1920)" },
-          height: { type: "number", description: "Height (256-1920)" },
-          fps: { type: "number", description: "Frame rate (15-60)" }
+          maskImage: { type: "string", description: "Mask image for inpainting" }
         },
         required: ["prompt"]
       }
     },
     {
-      name: "imageToVideo",
-      description: "Animate images into videos",
+      name: "photoMaker",
+      description: "Subject personalization with PhotoMaker technology",
       inputSchema: {
         type: "object",
         properties: {
-          imageURL: { type: "string", description: "Image to animate" },
-          prompt: { type: "string", description: "Animation description" },
-          model: { type: "string", description: "Model AIR" },
-          duration: { type: "number", description: "Duration in seconds" }
+          prompt: { type: "string", description: "Description with subject" },
+          inputImages: { type: "array", description: "Reference images of subject", items: { type: "string" } },
+          model: { type: "string", description: "Model AIR (default: civitai:139562@344487)" },
+          width: { type: "number", description: "Output width" },
+          height: { type: "number", description: "Output height" },
+          steps: { type: "number", description: "Generation steps" }
+        },
+        required: ["prompt", "inputImages"]
+      }
+    },
+    {
+      name: "imageUpscale",
+      description: "High-quality image resolution enhancement",
+      inputSchema: {
+        type: "object",
+        properties: {
+          imageURL: { type: "string", description: "Image to upscale" },
+          upscaleFactor: { type: "number", description: "Scale factor (2, 3, or 4)" }
         },
         required: ["imageURL"]
       }
     },
     {
-      name: "removeBackground",
-      description: "Remove background from images",
+      name: "imageBackgroundRemoval",
+      description: "Background removal with AI models",
       inputSchema: {
         type: "object",
         properties: {
@@ -368,34 +369,8 @@ class RunwareMCPClient {
       }
     },
     {
-      name: "upscaleImage",
-      description: "Upscale images to higher resolution",
-      inputSchema: {
-        type: "object",
-        properties: {
-          imageURL: { type: "string", description: "Image URL" },
-          upscaleFactor: { type: "number", description: "Scale factor (2, 3, or 4)" }
-        },
-        required: ["imageURL"]
-      }
-    },
-    {
-      name: "inpaintImage",
-      description: "Edit specific parts of images using masks",
-      inputSchema: {
-        type: "object",
-        properties: {
-          prompt: { type: "string", description: "What to paint" },
-          seedImage: { type: "string", description: "Original image" },
-          maskImage: { type: "string", description: "Mask (white = edit area)" },
-          model: { type: "string", description: "Model AIR" }
-        },
-        required: ["prompt", "seedImage", "maskImage"]
-      }
-    },
-    {
-      name: "captionImage",
-      description: "Generate captions for images",
+      name: "imageCaption",
+      description: "AI-powered image description generation",
       inputSchema: {
         type: "object",
         properties: {
@@ -405,26 +380,63 @@ class RunwareMCPClient {
       }
     },
     {
-      name: "enhancePrompt",
-      description: "Enhance and improve text prompts",
+      name: "imageMasking",
+      description: "Automatic mask generation for objects in images",
       inputSchema: {
         type: "object",
         properties: {
-          prompt: { type: "string", description: "Original prompt" }
+          imageURL: { type: "string", description: "Source image" },
+          prompt: { type: "string", description: "Object to mask (e.g., 'person', 'face')" }
+        },
+        required: ["imageURL", "prompt"]
+      }
+    },
+    {
+      name: "videoInference",
+      description: "Text-to-video and image-to-video generation with automatic model selection",
+      inputSchema: {
+        type: "object",
+        properties: {
+          prompt: { type: "string", description: "Video description" },
+          model: { type: "string", description: "Model AIR (auto-selected if not provided)" },
+          duration: { type: "number", description: "Duration in seconds (1-10)" },
+          width: { type: "number", description: "Width (auto-set based on model)" },
+          height: { type: "number", description: "Height (auto-set based on model)" },
+          fps: { type: "number", description: "Frame rate (15-60)" },
+          frameImages: { type: "array", description: "Images for I2V", items: { type: "object" } }
         },
         required: ["prompt"]
       }
     },
     {
-      name: "controlnetPreprocess",
-      description: "Preprocess images for ControlNet (edges, depth, pose, etc)",
+      name: "imageUpload",
+      description: "Upload local images to get Runware UUIDs",
       inputSchema: {
         type: "object",
         properties: {
-          imageURL: { type: "string", description: "Image to preprocess" },
-          preprocessor: { type: "string", description: "Type: canny, depth, pose, mlsd, hed, scribble" }
+          inputImage: { type: "string", description: "Image file path or URL" }
         },
-        required: ["imageURL", "preprocessor"]
+        required: ["inputImage"]
+      }
+    },
+    {
+      name: "modelSearch",
+      description: "Search and discover AI models on the platform",
+      inputSchema: {
+        type: "object",
+        properties: {
+          query: { type: "string", description: "Search query" }
+        },
+        required: ["query"]
+      }
+    },
+    {
+      name: "listVideoModels",
+      description: "List all supported video models organized by provider",
+      inputSchema: {
+        type: "object",
+        properties: {},
+        required: []
       }
     }
   ];
@@ -435,35 +447,35 @@ class RunwareMCPClient {
 
   async callTool(name: string, args: Record<string, unknown>): Promise<unknown> {
     switch (name) {
-      case "generateImageFromText":
-        return await generateImageFromText(args as Parameters<typeof generateImageFromText>[0]);
+      case "imageInference":
+        return await imageInference(args as Parameters<typeof imageInference>[0]);
       
-      case "imageToImage":
-        return await imageToImage(args as Parameters<typeof imageToImage>[0]);
+      case "photoMaker":
+        return await photoMaker(args as Parameters<typeof photoMaker>[0]);
       
-      case "generateVideoFromText":
-        return await generateVideoFromText(args as Parameters<typeof generateVideoFromText>[0]);
+      case "imageUpscale":
+        return await imageUpscale(args.imageURL as string, args.upscaleFactor as number | undefined);
       
-      case "imageToVideo":
-        return await imageToVideo(args as Parameters<typeof imageToVideo>[0]);
+      case "imageBackgroundRemoval":
+        return await imageBackgroundRemoval(args.imageURL as string);
       
-      case "removeBackground":
-        return await removeBackground(args.imageURL as string);
+      case "imageCaption":
+        return await imageCaption(args.imageURL as string);
       
-      case "upscaleImage":
-        return await upscaleImage(args.imageURL as string, args.upscaleFactor as number | undefined);
+      case "imageMasking":
+        return await imageMasking(args as Parameters<typeof imageMasking>[0]);
       
-      case "inpaintImage":
-        return await inpaintImage(args as Parameters<typeof inpaintImage>[0]);
+      case "videoInference":
+        return await videoInference(args as Parameters<typeof videoInference>[0]);
       
-      case "captionImage":
-        return await captionImage(args.imageURL as string);
+      case "imageUpload":
+        return await imageUpload(args.inputImage as string);
       
-      case "enhancePrompt":
-        return await enhancePrompt(args.prompt as string);
+      case "modelSearch":
+        return await modelSearch(args.query as string);
       
-      case "controlnetPreprocess":
-        return await controlnetPreprocess(args as Parameters<typeof controlnetPreprocess>[0]);
+      case "listVideoModels":
+        return getSupportedVideoModels();
       
       default:
         throw new Error(`Unknown tool: ${name}`);
