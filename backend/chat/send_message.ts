@@ -5,6 +5,7 @@ import db from "../db";
 import { streamChatCompletion } from "./openrouter";
 import type { OpenRouterMessage } from "./openrouter";
 import { mcpClient } from "../mcp/runware";
+import { memoriesClient } from "../mcp/memories";
 
 interface SendMessageRequest {
   conversationId: string;
@@ -19,11 +20,119 @@ interface MessageChunk {
   toolResult?: unknown;
 }
 
-async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boolean; toolName?: string; args?: Record<string, unknown> }> {
+async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boolean; toolName?: string; args?: Record<string, unknown>; client?: "runware" | "memories" }> {
   try {
     const messageLower = userMessage.toLowerCase();
     
-    // VIDEO GENERATION
+    // MEMORIES.AI VIDEO ANALYSIS
+    // Upload video from URL
+    if ((messageLower.includes("upload") || messageLower.includes("analyze") || messageLower.includes("index")) && 
+        (messageLower.includes("video") || messageLower.includes("url"))) {
+      
+      const urlMatch = userMessage.match(/https?:\/\/[^\s]+/);
+      const url = urlMatch ? urlMatch[0] : "placeholder";
+      
+      // Check if it's a platform URL (TikTok, YouTube, Instagram)
+      if (url.includes("tiktok.com") || url.includes("youtube.com") || url.includes("youtu.be") || 
+          url.includes("instagram.com") || url.includes("facebook.com")) {
+        return {
+          shouldUseMCP: true,
+          client: "memories",
+          toolName: "uploadVideoFromPlatform",
+          args: {
+            videoUrls: [url],
+            quality: 1080
+          }
+        };
+      } else {
+        return {
+          shouldUseMCP: true,
+          client: "memories",
+          toolName: "uploadVideoFromURL",
+          args: { url }
+        };
+      }
+    }
+    
+    // Chat with specific videos
+    if ((messageLower.includes("tell me about") || messageLower.includes("what") || messageLower.includes("summarize")) && 
+        messageLower.includes("video")) {
+      
+      const videoIdMatch = userMessage.match(/VI\d+/);
+      if (videoIdMatch) {
+        return {
+          shouldUseMCP: true,
+          client: "memories",
+          toolName: "chatWithVideos",
+          args: {
+            videoNos: [videoIdMatch[0]],
+            prompt: userMessage
+          }
+        };
+      }
+    }
+    
+    // Chat with personal media library
+    if ((messageLower.includes("when did i") || messageLower.includes("find my video") || 
+         messageLower.includes("show me videos")) && !messageLower.includes("generate")) {
+      return {
+        shouldUseMCP: true,
+        client: "memories",
+        toolName: "chatWithPersonalMedia",
+        args: {
+          prompt: userMessage
+        }
+      };
+    }
+    
+    // Video market research
+    if ((messageLower.includes("what does") || messageLower.includes("how is")) && 
+        (messageLower.includes("post") || messageLower.includes("trending") || messageLower.includes("tiktok"))) {
+      return {
+        shouldUseMCP: true,
+        client: "memories",
+        toolName: "videoMarketerChat",
+        args: {
+          prompt: userMessage,
+          type: messageLower.includes("youtube") ? "YOUTUBE" : 
+                messageLower.includes("instagram") ? "INSTAGRAM" : "TIKTOK"
+        }
+      };
+    }
+    
+    // Get transcription
+    if (messageLower.includes("transcri") && messageLower.includes("video")) {
+      const videoIdMatch = userMessage.match(/VI\d+/);
+      if (videoIdMatch) {
+        return {
+          shouldUseMCP: true,
+          client: "memories",
+          toolName: messageLower.includes("audio") ? "getAudioTranscription" : "getVideoTranscription",
+          args: {
+            videoNo: videoIdMatch[0]
+          }
+        };
+      }
+    }
+    
+    // Generate summary
+    if ((messageLower.includes("summary") || messageLower.includes("chapter") || messageLower.includes("topic")) && 
+        messageLower.includes("video")) {
+      const videoIdMatch = userMessage.match(/VI\d+/);
+      if (videoIdMatch) {
+        return {
+          shouldUseMCP: true,
+          client: "memories",
+          toolName: "generateSummary",
+          args: {
+            videoNo: videoIdMatch[0],
+            type: messageLower.includes("chapter") ? "CHAPTER" : "TOPIC"
+          }
+        };
+      }
+    }
+    
+    // RUNWARE VIDEO GENERATION
     if (messageLower.includes("video")) {
       if (messageLower.includes("generate") || messageLower.includes("create") || messageLower.includes("make")) {
         // Extract prompt
@@ -268,7 +377,10 @@ export const sendMessage = api.streamOut<SendMessageRequest, MessageChunk>(
             }
             
             console.log(`Calling MCP tool (attempt ${attempt + 1}):`, mcpCheck.toolName, "with args:", currentArgs);
-            toolResult = await mcpClient.callTool(mcpCheck.toolName, currentArgs || {});
+            
+            // Choose the correct client
+            const client = mcpCheck.client === "memories" ? memoriesClient : mcpClient;
+            toolResult = await client.callTool(mcpCheck.toolName, currentArgs || {});
             console.log("MCP tool result:", JSON.stringify(toolResult));
             
             // Format result as media
