@@ -83,6 +83,10 @@ export const uploadFile = api.raw(
 
       // Upload to Memories.ai
       const apiKey = memoriesApiKey();
+      
+      console.log("[Upload] API Key present:", apiKey ? "YES" : "NO");
+      console.log("[Upload] API Key length:", apiKey?.length || 0);
+      
       const uploadResponse = await fetch("https://api.memories.ai/serve/api/v1/upload", {
         method: "POST",
         headers: {
@@ -92,6 +96,7 @@ export const uploadFile = api.raw(
       });
 
       console.log("[Upload] Memories.ai response status:", uploadResponse.status);
+      console.log("[Upload] Response headers:", Object.fromEntries(uploadResponse.headers.entries()));
 
       // Clean up temp file
       try {
