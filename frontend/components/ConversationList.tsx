@@ -14,7 +14,7 @@ interface ConversationListProps {
 }
 
 export function ConversationList({ currentConversationId, onSelectConversation }: ConversationListProps) {
-  const backend = useBackend();
+  const backend = useBackend(); // Will update when auth changes (via useMemo in hook)
   const { isSignedIn, isLoaded } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const { toast } = useToast();
@@ -31,11 +31,14 @@ export function ConversationList({ currentConversationId, onSelectConversation }
       setConversations(response.conversations);
     } catch (error) {
       console.error("Failed to load conversations:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load conversations",
-        variant: "destructive"
-      });
+      // Only show toast if we're signed in (not an auth error)
+      if (isSignedIn) {
+        toast({
+          title: "Error",
+          description: "Failed to load conversations",
+          variant: "destructive"
+        });
+      }
     }
   };
 
