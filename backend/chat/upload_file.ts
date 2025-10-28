@@ -5,7 +5,7 @@ import { secret } from "encore.dev/config";
 import db from "../db";
 import * as formidable from "formidable";
 import * as fs from "fs";
-import * as FormData from "form-data";
+import FormData from "form-data";
 
 const memoriesApiKey = secret("MemoriesApiKey");
 
