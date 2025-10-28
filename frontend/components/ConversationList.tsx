@@ -3,6 +3,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useBackend } from "../hooks/useBackend";
+import { useAuth } from "@clerk/clerk-react";
 import type { Conversation } from "~backend/chat/types";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
@@ -14,12 +15,15 @@ interface ConversationListProps {
 
 export function ConversationList({ currentConversationId, onSelectConversation }: ConversationListProps) {
   const backend = useBackend();
+  const { isSignedIn, isLoaded } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
-    loadConversations();
-  }, []);
+    if (isLoaded && isSignedIn) {
+      loadConversations();
+    }
+  }, [isLoaded, isSignedIn]);
 
   const loadConversations = async () => {
     try {
