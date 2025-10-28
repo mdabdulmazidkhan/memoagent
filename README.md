@@ -59,7 +59,7 @@ Role: student
 
 ---
 
-## How to use (non-technical)
+## How to use 
 1. Open MemoAgent (web app).  
 2. Upload your video file.  
 3. Type a request in plain language (e.g., "Create a 15s social cut with captions and upbeat music").  
@@ -68,11 +68,3 @@ Role: student
 
 ---
 
-## Demo
-Click the thumbnail at the top to watch the short demonstration: https://youtu.be/e4BuAgaFtPM
-
-
-
----
-
-If you want the headings renamed or re-ordered (for example to add a separate FAQ H2 or a "Contact" H2), tell me which headings to change and I will update the file for copy/paste.  
