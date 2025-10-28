@@ -356,10 +356,35 @@ export const sendMessage = api.streamOut<SendMessageRequest, MessageChunk>(
       ORDER BY upload_time DESC
     `;
 
-    const messages: OpenRouterMessage[] = history.map(msg => ({
+    // Build messages with system prompt
+    const messages: OpenRouterMessage[] = [];
+    
+    // Add system prompt to guide behavior
+    let systemPrompt = `You are a helpful AI assistant with access to powerful tools for image generation, video generation, and video analysis.
+
+IMPORTANT RULES:
+- Stay focused on the user's question - answer what they ask, nothing more
+- Be concise and direct - avoid unnecessary elaboration
+- When using tools, explain what you're doing briefly
+- Only suggest capabilities when directly relevant to the user's request
+- Don't offer unsolicited advice or go off-topic`;
+
+    // Add context about uploaded videos if any exist
+    if (uploadedVideos.length > 0) {
+      const videoList = uploadedVideos.map(v => `- ${v.video_no} (${v.video_name})`).join('\n');
+      systemPrompt += `\n\nUploaded videos in this conversation:\n${videoList}`;
+    }
+
+    messages.push({
+      role: "system",
+      content: systemPrompt
+    });
+
+    // Add conversation history
+    messages.push(...history.map(msg => ({
       role: msg.role as "user" | "assistant" | "system",
       content: msg.content
-    }));
+    })));
 
     const assistantMessageId = randomUUID();
     let fullResponse = "";
