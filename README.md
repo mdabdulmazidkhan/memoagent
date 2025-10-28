@@ -1,64 +1,100 @@
-```markdown
 # MemoAgent — Simple overview (non-technical)
 
-Demo video: https://youtu.be/e4BuAgaFtPM
+[![Watch the demo](https://img.youtube.com/vi/e4BuAgaFtPM/0.jpg)](https://youtu.be/e4BuAgaFtPM)  
+Demo: https://youtu.be/e4BuAgaFtPM
 
-What I did:
-I prepared a short, non-technical README that explains what MemoAgent is, what it can do, and how to use it in everyday language. Below is a user-friendly guide you can share with people who just want to understand and try the tool — no technical steps or setup required.
+---
 
-What it is
-MemoAgent is an intelligent video assistant you can talk to in plain language. Give it any video you have and tell it what you want — for example, make a short highlight clip, summarize what was said, remove background noise, or extract the parts that show a specific object. MemoAgent uses memory to remember preferences so it gives more consistent results over time.
+## Project Overview
+MemoAgent is an intelligent, conversational video assistant. Upload any video and ask for edits, highlights, summaries, clips, or audio fixes in plain language — no editing skills required. It saves user preferences so future jobs follow a consistent style. MemoAgent helps creators, students, marketers, and teams save time and produce polished short videos from long footage.
 
-Why you might use it
-- Save time editing videos for social media, presentations, or reports.
-- Quickly find answers inside long videos (e.g., "When does the speaker mention pricing?").
-- Produce polished short clips from longer footage without learning editing software.
-- Keep consistent style across many videos by saving your preferences.
+---
 
-How to use it (very simple)
-1. Open MemoAgent (web page or app).
-2. Upload the video file you want to work with.
-3. Type a natural-language request — describe what you want as you would to another person.
-4. Run the job and wait a short while (processing time varies).
-5. Download or share the finished video, transcript, or clips.
+## Team Introduction
+I am a student from Bangladesh.  
+Role: Creator / Developer / Project owner.  
+Fun fact (optional): Built this to speed up editing class and project videos.
 
-Everyday examples you can try
-- "Create a 30-second highlight reel with the most exciting moments and add upbeat music."
-- "Summarize the main points from minutes 2:00 to 5:00 in one paragraph."
-- "Find the moment where the presenter says 'pricing' and give me a 15-second clip around it."
-- "Remove background noise and boost the speaker's voice."
-- "Make a short social-media version (15s) with captions and our brand text at the start."
+---
 
-Tips for best results
-- Be specific about time ranges or what you want featured (e.g., “from 00:01:20 to 00:02:00” or “show only scenes with the product”).
-- Say if you want a particular mood or style: calm, energetic, cinematic, etc.
-- If you prefer a repeatable style, save those preferences and the agent will remember them for future requests.
+## Key Features & Tech Stack
+### Key features
+- Natural-language requests for video edits (e.g., "Make a 30s highlight reel").
+- Summaries & scene search (find where topics/words appear).
+- Clip extraction for social formats.
+- Audio clean-up: noise removal and voice boost.
+- Memory-aware personalization (remember preferred styles).
 
-Privacy & safety (simple)
-- Treat uploaded videos as private content. Use the built-in delete option if you want files removed.
-- Check sharing options before you publish — you control who can view or download outputs.
-- If sensitive information appears in a video (personal data, financial info), avoid sharing it publicly.
+### Tech stack
+- memories.ai API — stores and recalls user preferences, saved styles, and past jobs.  
+- runwere.ai API — runs video processing tasks (trimming, filters, assembly).  
+- Web UI (uploader + request box) — user-facing interface for uploads and plain-language requests.
 
-Frequently asked questions
-Q: Do I need to know editing software?
-A: No. MemoAgent is designed so you can describe what you want in plain language.
+---
 
-Q: Can it work with any video I have?
-A: Yes — it accepts common video files. Large files may take longer to process.
+## Sponsor Tools Used (and how they were integrated)
+- runwere.ai — Integrated as the primary video processing engine. After MemoAgent parses a user request into processing steps, it calls runwere.ai APIs to extract clips, apply filters/transitions, and assemble the final video.
+- memories.ai — Used for persistent memory: saving user style presets and retrieving them to personalize subsequent jobs.
 
-Q: How long does it take?
-A: It depends on the request and video length. Simple trims are fast; complex edits or generation may take longer.
+---
 
-Q: Will it remember my preferences?
-A: Yes — it can store style preferences so future jobs match your taste.
+## Challenges & Learnings
+### Challenges
+- Converting open-ended natural-language requests into reliable processing steps.
+- Handling very large video files while keeping processing time reasonable.
+- Ensuring privacy and safe handling of uploaded content.
 
-Watch the demo
-See a short demonstration of MemoAgent in action: https://youtu.be/e4BuAgaFtPM
+### Learnings
+- Specific, well-structured prompts (time ranges, mood, style) greatly improve results.
+- Storing style presets yields more consistent outputs across multiple videos.
+- Leveraging specialized APIs (runwere, memories) speeds development and offloads heavy processing.
 
-What's next
-If you want, I can:
-- Add a short step-by-step quick start for non-technical users (one-page guide).
-- Create a printable one-page cheat-sheet of example requests.
-- Extract a short transcript of the demo video and pull sample prompts from it.
+---
 
-```
+## Future Improvements / Next Steps
+- Add preset styles (social, cinematic, podcast) users can select.
+- Improve upload and processing speed with progress indicators for large files.
+- Add stronger privacy controls and one-click deletion of uploaded content.
+- Multi-language support for prompts and transcripts.
+- In-app tutorial and a copy/paste prompt cheat-sheet for non-technical users.
+
+---
+
+## How to use (non-technical)
+1. Open MemoAgent (web app).  
+2. Upload your video file.  
+3. Type a request in plain language (e.g., "Create a 15s social cut with captions and upbeat music").  
+4. Submit and wait — processing time varies.  
+5. Download or share the finished clip.
+
+---
+
+## Demo
+Click the thumbnail at the top to watch the short demonstration: https://youtu.be/e4BuAgaFtPM
+
+(Note: GitHub README files do not support iframe embeds. The thumbnail above links directly to YouTube.)
+
+---
+
+## Headings Checklist (which is H1 / H2 / H3)
+- H1
+  - MemoAgent — Simple overview (non-technical)
+- H2
+  - Project Overview
+  - Team Introduction
+  - Key Features & Tech Stack
+  - Sponsor Tools Used (and how they were integrated)
+  - Challenges & Learnings
+  - Future Improvements / Next Steps
+  - How to use (non-technical)
+  - Demo
+  - Headings Checklist
+- H3 (used as subheadings where helpful)
+  - Key features (under Key Features & Tech Stack)
+  - Tech stack (under Key Features & Tech Stack)
+  - Challenges (under Challenges & Learnings)
+  - Learnings (under Challenges & Learnings)
+
+---
+
+If you want the headings renamed or re-ordered (for example to add a separate FAQ H2 or a "Contact" H2), tell me which headings to change and I will update the file for copy/paste.  
