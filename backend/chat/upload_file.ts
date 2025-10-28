@@ -148,6 +148,8 @@ export const uploadFile = api.raw(
       }
 
       console.log("[Upload] Parsed result:", result);
+      console.log("[Upload] Result data fields:", Object.keys(result.data || {}));
+      console.log("[Upload] videoStatus value:", result.data?.videoStatus);
       
       if (result.code !== "0000") {
         throw new Error(`Memories.ai error (code ${result.code}): ${result.msg}`);
@@ -156,10 +158,15 @@ export const uploadFile = api.raw(
       console.log("[Upload] Upload successful:", result.data);
 
       // Save video reference to database
+      // Default to UNPARSE if videoStatus is missing (common for initial uploads)
+      const videoStatus = result.data.videoStatus || "UNPARSE";
       const videoId = randomUUID();
+      
+      console.log(`[Upload] Saving to DB - videoNo: ${result.data.videoNo}, videoName: ${result.data.videoName}, status: ${videoStatus}`);
+      
       await db.exec`
         INSERT INTO conversation_videos (id, conversation_id, video_no, video_name, status)
-        VALUES (${videoId}, ${conversationId}, ${result.data.videoNo}, ${result.data.videoName}, ${result.data.videoStatus})
+        VALUES (${videoId}, ${conversationId}, ${result.data.videoNo}, ${result.data.videoName}, ${videoStatus})
       `;
 
       console.log(`[Upload] Saved video ${result.data.videoNo} to conversation ${conversationId}`);
