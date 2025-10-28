@@ -5,6 +5,7 @@ import { secret } from "encore.dev/config";
 import db from "../db";
 import * as formidable from "formidable";
 import * as fs from "fs";
+import * as FormData from "form-data";
 
 const memoriesApiKey = secret("MemoriesApiKey");
 
@@ -23,7 +24,7 @@ export const uploadFile = api.raw(
     try {
       console.log("[Upload] Receiving file upload request");
       
-      // Parse the multipart form data
+      // Parse the multipart form data from client
       const form = formidable.formidable({
         keepExtensions: true,
         maxFileSize: 500 * 1024 * 1024, // 500MB
@@ -31,7 +32,7 @@ export const uploadFile = api.raw(
 
       const [fields, files] = await form.parse(req);
       
-      console.log("[Upload] Fields:", fields);
+      console.log("[Upload] Fields:", Object.keys(fields));
       console.log("[Upload] Files:", Object.keys(files));
 
       const conversationId = fields.conversationId?.[0];
@@ -61,23 +62,24 @@ export const uploadFile = api.raw(
       }
 
       console.log(`[Upload] File: ${uploadedFile.originalFilename}, Size: ${uploadedFile.size}`);
+      console.log(`[Upload] File path: ${uploadedFile.filepath}`);
       console.log(`[Upload] Uploading for conversation: ${conversationId}`);
 
-      // Create FormData for Memories.ai - matching Python requests library behavior
+      // Create multipart form data for Memories.ai using form-data package
       const formData = new FormData();
       
-      // Read the file and create a Blob
-      const fileBuffer = fs.readFileSync(uploadedFile.filepath);
-      const blob = new Blob([fileBuffer], { type: uploadedFile.mimetype || 'video/mp4' });
+      // Add file stream - matching Python requests files parameter
+      const fileStream = fs.createReadStream(uploadedFile.filepath);
+      formData.append("file", fileStream, {
+        filename: uploadedFile.originalFilename || "video.mp4",
+        contentType: uploadedFile.mimetype || "video/mp4"
+      });
       
-      // Add file - this goes in the 'files' part
-      formData.append("file", blob, uploadedFile.originalFilename || "video.mp4");
-      
-      // Add data fields - these go in the 'data' part (as regular form fields, not JSON)
+      // Add data fields - matching Python requests data parameter
       formData.append("unique_id", auth.userID);
-      formData.append("retain_original_video", "True"); // Python boolean as string
+      formData.append("retain_original_video", "true");
       
-      // Tags should be an array - send as multiple form fields or JSON string
+      // Tags as individual array items
       const tags = [conversationId, "chat-upload", new Date().toISOString().split("T")[0]];
       tags.forEach(tag => {
         formData.append("tags", tag);
@@ -90,17 +92,53 @@ export const uploadFile = api.raw(
       
       console.log("[Upload] API Key present:", apiKey ? "YES" : "NO");
       console.log("[Upload] API Key length:", apiKey?.length || 0);
-      
-      const uploadResponse = await fetch("https://api.memories.ai/serve/api/v1/upload", {
-        method: "POST",
-        headers: {
-          "Authorization": apiKey,
-        },
-        body: formData,
+
+      // Use form-data's submit method which handles the request properly
+      const uploadPromise = new Promise<{ code: string; msg: string; data: UploadFileResponse }>((resolve, reject) => {
+        formData.submit({
+          protocol: "https:",
+          host: "api.memories.ai",
+          path: "/serve/api/v1/upload",
+          method: "POST",
+          headers: {
+            "Authorization": apiKey
+          }
+        }, (err, uploadResponse) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+
+          console.log("[Upload] Memories.ai response status:", uploadResponse.statusCode);
+
+          let responseData = "";
+          uploadResponse.on("data", (chunk) => {
+            responseData += chunk.toString();
+          });
+
+          uploadResponse.on("end", () => {
+            console.log("[Upload] Raw response:", responseData);
+
+            if (uploadResponse.statusCode !== 200) {
+              reject(new Error(`Memories.ai upload failed: ${uploadResponse.statusCode} - ${responseData}`));
+              return;
+            }
+
+            try {
+              const result = JSON.parse(responseData);
+              resolve(result);
+            } catch (e) {
+              reject(new Error(`Invalid JSON response: ${responseData}`));
+            }
+          });
+
+          uploadResponse.on("error", (err) => {
+            reject(err);
+          });
+        });
       });
 
-      console.log("[Upload] Memories.ai response status:", uploadResponse.status);
-      console.log("[Upload] Response headers:", Object.fromEntries(uploadResponse.headers.entries()));
+      const result = await uploadPromise;
 
       // Clean up temp file
       try {
@@ -109,22 +147,6 @@ export const uploadFile = api.raw(
         console.warn("[Upload] Failed to delete temp file:", e);
       }
 
-      const responseText = await uploadResponse.text();
-      console.log("[Upload] Raw response:", responseText);
-
-      if (!uploadResponse.ok) {
-        console.error("[Upload] Memories.ai error response:", responseText);
-        throw new Error(`Memories.ai upload failed: ${uploadResponse.status} - ${responseText}`);
-      }
-
-      let result: { code: string; msg: string; data: UploadFileResponse };
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        console.error("[Upload] Failed to parse response as JSON:", e);
-        throw new Error(`Invalid JSON response from Memories.ai: ${responseText}`);
-      }
-      
       console.log("[Upload] Parsed result:", result);
       
       if (result.code !== "0000") {

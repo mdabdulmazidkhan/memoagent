@@ -9,6 +9,7 @@
   "dependencies": {
     "@clerk/backend": "^1.27.0",
     "encore.dev": "^1.50.6",
+    "form-data": "^4.0.2",
     "formidable": "^3.5.4"
   },
   "devDependencies": {
