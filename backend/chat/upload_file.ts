@@ -63,21 +63,25 @@ export const uploadFile = api.raw(
       console.log(`[Upload] File: ${uploadedFile.originalFilename}, Size: ${uploadedFile.size}`);
       console.log(`[Upload] Uploading for conversation: ${conversationId}`);
 
-      // Create FormData for Memories.ai
+      // Create FormData for Memories.ai - matching Python requests library behavior
       const formData = new FormData();
       
       // Read the file and create a Blob
       const fileBuffer = fs.readFileSync(uploadedFile.filepath);
       const blob = new Blob([fileBuffer], { type: uploadedFile.mimetype || 'video/mp4' });
       
+      // Add file - this goes in the 'files' part
       formData.append("file", blob, uploadedFile.originalFilename || "video.mp4");
+      
+      // Add data fields - these go in the 'data' part (as regular form fields, not JSON)
       formData.append("unique_id", auth.userID);
-      formData.append("retain_original_video", "true");
-      formData.append("tags", JSON.stringify([
-        conversationId,
-        "chat-upload",
-        new Date().toISOString().split("T")[0]
-      ]));
+      formData.append("retain_original_video", "True"); // Python boolean as string
+      
+      // Tags should be an array - send as multiple form fields or JSON string
+      const tags = [conversationId, "chat-upload", new Date().toISOString().split("T")[0]];
+      tags.forEach(tag => {
+        formData.append("tags", tag);
+      });
 
       console.log("[Upload] Uploading to Memories.ai...");
 
