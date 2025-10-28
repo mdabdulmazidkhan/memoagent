@@ -109,16 +109,26 @@ export const uploadFile = api.raw(
         console.warn("[Upload] Failed to delete temp file:", e);
       }
 
+      const responseText = await uploadResponse.text();
+      console.log("[Upload] Raw response:", responseText);
+
       if (!uploadResponse.ok) {
-        const errorText = await uploadResponse.text();
-        console.error("[Upload] Memories.ai error:", errorText);
-        throw new Error(`Memories.ai upload failed: ${uploadResponse.status} - ${errorText}`);
+        console.error("[Upload] Memories.ai error response:", responseText);
+        throw new Error(`Memories.ai upload failed: ${uploadResponse.status} - ${responseText}`);
       }
 
-      const result = await uploadResponse.json() as { code: string; msg: string; data: UploadFileResponse };
+      let result: { code: string; msg: string; data: UploadFileResponse };
+      try {
+        result = JSON.parse(responseText);
+      } catch (e) {
+        console.error("[Upload] Failed to parse response as JSON:", e);
+        throw new Error(`Invalid JSON response from Memories.ai: ${responseText}`);
+      }
+      
+      console.log("[Upload] Parsed result:", result);
       
       if (result.code !== "0000") {
-        throw new Error(`Memories.ai error: ${result.msg}`);
+        throw new Error(`Memories.ai error (code ${result.code}): ${result.msg}`);
       }
 
       console.log("[Upload] Upload successful:", result.data);
