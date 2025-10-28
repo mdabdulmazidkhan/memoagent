@@ -1,4 +1,4 @@
-# MemoAgent — Simple overview (non-technical)
+# MemoAgent — Simple overview 
 
 [![Watch the demo](https://img.youtube.com/vi/e4BuAgaFtPM/0.jpg)](https://youtu.be/e4BuAgaFtPM)  
 Demo: https://youtu.be/e4BuAgaFtPM
@@ -12,8 +12,7 @@ MemoAgent is an intelligent, conversational video assistant. Upload any video an
 
 ## Team Introduction
 I am a student from Bangladesh.  
-Role: Creator / Developer / Project owner.  
-Fun fact (optional): Built this to speed up editing class and project videos.
+Role: student
 
 ---
 
@@ -65,35 +64,14 @@ Fun fact (optional): Built this to speed up editing class and project videos.
 2. Upload your video file.  
 3. Type a request in plain language (e.g., "Create a 15s social cut with captions and upbeat music").  
 4. Submit and wait — processing time varies.  
-5. Download or share the finished clip.
+
 
 ---
 
 ## Demo
 Click the thumbnail at the top to watch the short demonstration: https://youtu.be/e4BuAgaFtPM
 
-(Note: GitHub README files do not support iframe embeds. The thumbnail above links directly to YouTube.)
 
----
-
-## Headings Checklist (which is H1 / H2 / H3)
-- H1
-  - MemoAgent — Simple overview (non-technical)
-- H2
-  - Project Overview
-  - Team Introduction
-  - Key Features & Tech Stack
-  - Sponsor Tools Used (and how they were integrated)
-  - Challenges & Learnings
-  - Future Improvements / Next Steps
-  - How to use (non-technical)
-  - Demo
-  - Headings Checklist
-- H3 (used as subheadings where helpful)
-  - Key features (under Key Features & Tech Stack)
-  - Tech stack (under Key Features & Tech Stack)
-  - Challenges (under Challenges & Learnings)
-  - Learnings (under Challenges & Learnings)
 
 ---
 
