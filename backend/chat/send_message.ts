@@ -100,8 +100,9 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
       };
     }
     
-    // Get transcription
-    if (messageLower.includes("transcri") && messageLower.includes("video")) {
+    // Get transcription (includes timestamps)
+    if (messageLower.includes("transcri") || messageLower.includes("timestamp") || 
+        messageLower.includes("when does") || messageLower.includes("at what time")) {
       const videoIdMatch = userMessage.match(/VI\d+/);
       if (videoIdMatch) {
         return {
@@ -115,8 +116,9 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
       }
     }
     
-    // Generate summary
-    if ((messageLower.includes("summary") || messageLower.includes("chapter") || messageLower.includes("topic")) && 
+    // Generate summary with timestamps
+    if ((messageLower.includes("summary") || messageLower.includes("chapter") || 
+         messageLower.includes("topic") || messageLower.includes("breakdown")) && 
         messageLower.includes("video")) {
       const videoIdMatch = userMessage.match(/VI\d+/);
       if (videoIdMatch) {
@@ -126,7 +128,7 @@ async function checkMCPTools(userMessage: string): Promise<{ shouldUseMCP: boole
           toolName: "generateSummary",
           args: {
             videoNo: videoIdMatch[0],
-            type: messageLower.includes("chapter") ? "CHAPTER" : "TOPIC"
+            type: messageLower.includes("chapter") || messageLower.includes("when") ? "CHAPTER" : "TOPIC"
           }
         };
       }
@@ -367,12 +369,18 @@ IMPORTANT RULES:
 - Be concise and direct - avoid unnecessary elaboration
 - When using tools, explain what you're doing briefly
 - Only suggest capabilities when directly relevant to the user's request
-- Don't offer unsolicited advice or go off-topic`;
+- Don't offer unsolicited advice or go off-topic
+
+WHEN USER ASKS ABOUT TIMESTAMPS:
+- If they ask "when does X happen" or want specific timestamps, use getVideoTranscription or generateSummary tools
+- getVideoTranscription gives detailed timestamps for every segment
+- generateSummary (CHAPTER type) gives chapter breakdowns with timestamps
+- Always include the actual timestamp values in your response`;
 
     // Add context about uploaded videos if any exist
     if (uploadedVideos.length > 0) {
-      const videoList = uploadedVideos.map(v => `- ${v.video_no} (${v.video_name})`).join('\n');
-      systemPrompt += `\n\nUploaded videos in this conversation:\n${videoList}`;
+      const videoList = uploadedVideos.map(v => `- ${v.video_no} (${v.video_name}, status: ${v.status})`).join('\n');
+      systemPrompt += `\n\nUploaded videos in this conversation:\n${videoList}\n\nTo get timestamps, use the transcription or summary tools with these video IDs.`;
     }
 
     messages.push({
